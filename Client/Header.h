@@ -1,10 +1,9 @@
 #pragma once
 #include <iostream>
+#include <asio.hpp>
 #include <SDL.h>
 #include <SDL_mixer.h>
 #include <SDL_ttf.h>
-#include <SDL_net.h>
-#include <thread>
 #include "GoreEngine.h"
 
 extern int playerindex;

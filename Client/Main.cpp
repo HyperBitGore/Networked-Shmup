@@ -3,7 +3,6 @@
 bool exitf = false;
 Gore gore;
 std::string ip;
-IPaddress sendip;
 int playerindex = 0;
 
 //will be populated from server connect event
@@ -19,64 +18,50 @@ std::vector<Entity> walls;
 //add camera
 //walls and collision
 
-void recieveData() {
+void recieveData(std::string curip) {
 	char buf[121];
-	UDPsocket recvsoc = SDLNet_UDP_Open(0);
+	asio::io_context io;
+	asio::ip::udp::endpoint endpoi(asio::ip::address::from_string(curip), 6892);
+	asio::ip::udp::socket recvsoc(io);
+	asio::error_code ec1;
+	recvsoc.open(asio::ip::udp::v4(), ec1);
+	recvsoc.bind(endpoi, ec1);
+	recvsoc.connect(endpoi);
+	std::cerr << ec1.message() << std::endl;
 	bool exitl = false;
 	while (!exitl) {
 		//receive data from server
-		UDPpacket pack;
-		SDLNet_UDP_Recv(recvsoc, &pack);
-		if (pack.len > 0) {
-			char* m = buf;
-			char* mv = m;
-			for (int i = 0; i < pack.len; i++) {
-				*mv = pack.data[i];
-				mv++;
-			}
-			mv = m;
-			mv++;
-			int* mp = (int*)m;
-			float* mf;
-			switch (m[0]) {
-			case NEWPLAYER:
-
+		recvsoc.receive(asio::buffer(buf));
+		char* m = buf;
+		m++;
+		int* mp = (int*)m;
+		float* mf;
+		switch (buf[0]) {
+		case NEWPLAYER:
+				
+			break;
+		case NEWBULLET:
+			
 				break;
-			case NEWBULLET:
-
+		case BULLETPOS:
+			
 				break;
-			case BULLETPOS:
-
-				break;
-			case PLAYERPOS:
-				for (int i = 1; i < 121 && mv[i] != -1; i += 12) {
-					if (*mp != playerindex) {
-						mf = (float*)mp;
-						mf++;
-						players[*mp].x = *mf;
-						mf++;
-						players[*mp].y = *mf;
-					}
-					else {
-						*mp += 3;
-					}
+		case PLAYERPOS:
+			for (int i = 1; i < 121 && buf[i] != -1; i += 12) {
+				if (*mp != playerindex) {
+					mf = (float*)mp;
+					mf++;
+					players[*mp].x = *mf;
+					mf++;
+					players[*mp].y = *mf;
 				}
-				break;
+				else {
+					*mp += 3;
+				}
 			}
-			free(m);
+			break;
 		}
 	}
-}
-
-void writeData(char* buf, int size) {
-	UDPsocket sendsoc = SDLNet_UDP_Open(0);
-	UDPpacket* pack = SDLNet_AllocPacket(size);
-	pack->address = sendip;
-	pack->data = (Uint8*)buf;
-	pack->channel = -1;
-	pack->maxlen = size;
-	SDLNet_UDP_Send(sendsoc, -1, pack);
-	SDLNet_FreePacket(pack);
 }
 
 int main() {
@@ -89,9 +74,7 @@ int main() {
 	if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 4, 2048) < 0) {
 		std::cout << "Mix failed to init" << Mix_GetError() << std::endl;
 	}
-	if (SDLNet_Init() == 1) {
-		std::cout << "SDL failed to intit " << SDLNet_GetError() << std::endl;
-	}
+	asio::io_context io;
 	Player p1;
 	p1.w = 50;
 	p1.h = 50;
@@ -108,7 +91,13 @@ int main() {
 	std::cout << std::endl;
 
 	Game::connectToServer(ip, players, bullets, &p1);
-	SDLNet_ResolveHost(&sendip, ip.c_str(), 6892);
+	asio::ip::udp::endpoint sendip(asio::ip::address::from_string(ip), 6891);
+	asio::ip::udp::socket sendsoc(io);
+	asio::error_code ignore1;
+	sendsoc.open(asio::ip::udp::v4(), ignore1);
+	sendsoc.bind(sendip, ignore1);
+	sendsoc.connect(sendip);
+	std::cerr << ignore1.message() << std::endl;
 
 	SDL_Window* window;
 	SDL_Renderer* rend;
@@ -129,7 +118,8 @@ int main() {
 	//vector of timers that corresponds to bullets by index
 	std::vector<TimerObject> btimers;
 	
-	std::thread datathread(recieveData);
+	std::thread datathread(recieveData, ip);
+	//recieveData(ip);
 	//loop variables
 	double delta;
 	SDL_Event e;
@@ -137,6 +127,8 @@ int main() {
 	keys = SDL_GetKeyboardState(NULL);
 	char movebuf[13];
 	char shootbuf[20];
+	//testing vars
+	p1.index = 0;
 	while (!exitf) {
 		try {
 			while (SDL_PollEvent(&e)) {
@@ -172,9 +164,7 @@ int main() {
 			*mf = p1.x;
 			mf++;
 			*mf = p1.y;
-			writeData(movebuf, 13);
-			//std::thread write_dat(writeData, movebuf);
-			//write_dat.detach();
+			sendsoc.send(asio::buffer(movebuf));
 
 			//rendering the players
 			SDL_SetRenderDrawColor(rend, 255, 50, 50, 0);

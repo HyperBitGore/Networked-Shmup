@@ -10,9 +10,10 @@ bool Game::isColliding(Entity* e1, Entity* e2) {
 
 void Game::connectToServer(std::string ip, std::vector<Player>& players, std::vector<Bullet>& bullets, Player* p1) {
 	Gore gore;
-	IPaddress cip;
-	SDLNet_ResolveHost(&cip, ip.c_str(), 6890);
-	TCPsocket soc =	SDLNet_TCP_Open(&cip);
+	asio::io_context io;
+	asio::ip::tcp::endpoint socend(asio::ip::address::from_string(ip), 6890);
+	asio::ip::tcp::socket soc(io);
+	soc.connect(socend);
 	//read all the data it sends
 	bool notread = true;
 	char mode = 0;
@@ -20,7 +21,7 @@ void Game::connectToServer(std::string ip, std::vector<Player>& players, std::ve
 	while (notread) {
 		Player p;
 		Bullet b;
-		SDLNet_TCP_Recv(soc, buf, 28);
+		soc.receive(asio::buffer(buf));
 		switch (mode) {
 		case 0:
 			for (int i = 0; i < 28; i++) {
@@ -29,11 +30,9 @@ void Game::connectToServer(std::string ip, std::vector<Player>& players, std::ve
 					break;
 				}
 			}
-			if (buf[23] != -124) {
-				gore.deserilizeStruct((char*)&p, buf, 24);
-				std::cout << buf << "\n";
-				players.push_back(p);
-			}
+			gore.deserilizeStruct((char*)&p, buf, 24);
+			std::cout << buf << "\n";
+			players.push_back(p);
 			break;
 		case 1:
 			//have to do this because bullet data can get out of order
@@ -43,18 +42,17 @@ void Game::connectToServer(std::string ip, std::vector<Player>& players, std::ve
 					break;
 				}
 			}
-			if (buf[27] != -124) {
-				gore.deserilizeStruct((char*)&b, buf, 28);
-				std::cout << buf << "\n";
-				bullets.push_back(b);
-			}
+			gore.deserilizeStruct((char*)&b, buf, 28);
+			std::cout << buf << "\n";
+			bullets.push_back(b);
 			break;
 		}
 	}
 	char indexbuf[4];
-	SDLNet_TCP_Recv(soc, indexbuf, 4);
+	asio::error_code ignore;
+	soc.read_some(asio::buffer(indexbuf), ignore);
 	int* ind = (int*)indexbuf;
 	p1->index = *ind;
 	playerindex = p1->index;
-	SDLNet_TCP_Close(soc);
+	soc.close();
 }
