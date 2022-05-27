@@ -123,14 +123,6 @@ void connectListener() {
 		p.y = 400;
 		p.index = players.size();
 		players.push_back(p);
-		/*char indexbuf[4];
-		int* pit = (int*)indexbuf;
-		*pit = players.size()-1;
-		soc.send(asio::buffer(indexbuf));*/
-		/*asio::ip::udp::endpoint(remote_ad, 6892);
-		asio::ip::udp::endpoint(remote_ad, 6891);
-		en.recv = 
-		en.send =*/
 		endpoints.push_back(ipstring);
 		std::cout << endpoints.size() << std::endl;
 		soc.close();
@@ -138,16 +130,39 @@ void connectListener() {
 }
 
 void writenewPlayer() {
-	
+	//maybe just serilize the struct 
 }
 void writenewBullet() {
-	
+	//do same thing as player
 }
-void writeBullets() {
+void writeBullets(asio::ip::udp::socket* soc, std::string ip) {
 	//write a bunch of small packets, will be more effiecent
-	//char* output = std::malloc()
-	for (auto& i : bullets) {
-
+	asio::ip::udp::endpoint en1(asio::ip::address::from_string(ip), 6892);
+	asio::error_code er1;
+	char buf[121];
+	buf[0] = BULLETPOS;
+	for (int i = 0; i < bullets.size(); i++) {
+		char* m = buf;
+		m++;
+		for (int j = 1; j < 121; j++) {
+			int* ind = (int*)m;
+			*ind = bullets[i].index;
+			ind++;
+			float* pos = (float*)ind;
+			*pos = bullets[i].x;
+			pos++;
+			*pos = bullets[i].y;
+			m += 12;
+			i++;
+			if (i >= bullets.size()) {
+				*m = -52;
+				break;
+			}
+		}
+		std::cerr << er1.message() << "\n";
+		soc->send_to(asio::buffer(buf), en1, 0, er1);
+		std::cerr << er1.message() << "\n";
+		std::cout << "Wrote data to " << ip << "\n";
 	}
 }
 void writePlayers(asio::ip::udp::socket* soc, std::string ip) {
@@ -167,7 +182,6 @@ void writePlayers(asio::ip::udp::socket* soc, std::string ip) {
 			*pos = players[i].x;
 			pos++;
 			*pos = players[i].y;
-			pos++;
 			m += 12;
 			i++;
 			if (i >= players.size()) { 
@@ -202,6 +216,15 @@ void recieveData(asio::ip::udp::socket* soc, std::string ip) {
 		mf++;
 		players[*mp].y = *mf;
 		std::cout << "Editing player " << *mp << "\n";
+		break;
+	case BULLETPOS:
+		mp = (int*)m;
+		mf = (float*)m;
+		mf++;
+		bullets[*mp].x = *mf;
+		mf++;
+		bullets[*mp].y = *mf;
+		std::cout << "Editing bullet " << *mp << "\n";
 		break;
 	}
 }

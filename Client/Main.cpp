@@ -8,6 +8,8 @@ int playerindex = 0;
 //players will contain every other player besides local one
 std::vector<Player> players;
 std::vector<Bullet> bullets;
+//vector of timers that corresponds to bullets by index
+std::vector<TimerObject> btimers;
 std::vector<Entity> walls;
 
 //recieve bullets positions
@@ -40,17 +42,29 @@ void recieveData(std::string curip) {
 		float* mf;
 		switch (buf[0]) {
 		case NEWPLAYER:
-				
+				//maybe move this to a tcp connection
 			break;
 		case NEWBULLET:
 			
 				break;
 		case BULLETPOS:
-			
+			for (int i = 1; i < 121 && buf[i] != -52; i += 12) {
+				if (*mp < bullets.size()) {
+					mf = (float*)mp;
+					mf++;
+					bullets[*mp].x = *mf;
+					mf++;
+					bullets[*mp].y = *mf;
+				}
+				else {
+					*mp += 3;
+				}
+				
+			}
 				break;
 		case PLAYERPOS:
 			for (int i = 1; i < 121 && buf[i] != -52; i += 12) {
-				if (*mp != playerindex) {
+				if (*mp != playerindex && *mp < players.size()) {
 					mf = (float*)mp;
 					mf++;
 					players[*mp].x = *mf;
@@ -84,6 +98,11 @@ int main() {
 	p1.x = 400;
 	p1.y = 400;
 	p1.index = 0;
+
+	players.reserve(100);
+	bullets.reserve(1000);
+	walls.reserve(100);
+	btimers.reserve(1000);
 
 	//server connection
 	std::string ip;
@@ -119,17 +138,16 @@ int main() {
 	catch (std::exception& epp) {
 		std::cout << epp.what() << std::endl;
 	}
-	//vector of timers that corresponds to bullets by index
-	std::vector<TimerObject> btimers;
 	
 	//recieveData(ip);
 	//loop variables
-	double delta;
+	double delta = 0;
+	double shootimer = 0;
 	SDL_Event e;
 	const Uint8* keys;
 	keys = SDL_GetKeyboardState(NULL);
 	char movebuf[129];
-	char shootbuf[20];
+	int mx, my;
 	//testing vars
 	//p1.index = 0;
 	while (!exitf) {
@@ -142,6 +160,7 @@ int main() {
 				}
 			}
 			delta = gore.getDelta();
+			shootimer += delta;
 			SDL_SetRenderDrawColor(rend, 0, 0, 0, 0);
 			SDL_RenderClear(rend);
 			//local player input
@@ -157,6 +176,13 @@ int main() {
 			else if (keys[SDL_SCANCODE_A]) {
 				p1.x -= 200 * delta;
 			}
+			if (shootimer > 0.1) {
+				if (SDL_GetMouseState(&mx, &my) | SDL_BUTTON(SDL_BUTTON_LEFT)) {
+					//send bullet creation packet to server, might wanna use 
+					shootimer = 0;
+				}
+			}
+
 			movebuf[0] = PLAYERPOS;
 			char* m = movebuf;
 			m++;
