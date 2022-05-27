@@ -48,11 +48,12 @@ void Game::connectToServer(std::string ip, std::vector<Player>& players, std::ve
 			break;
 		}
 	}
-	char indexbuf[4];
+	/*char indexbuf[4];
 	asio::error_code ignore;
 	soc.read_some(asio::buffer(indexbuf), ignore);
-	int* ind = (int*)indexbuf;
-	p1->index = *ind;
+	std::cerr << ignore.message() << std::endl;
+	int* ind = (int*)indexbuf;*/
+	p1->index = players.size()-1;
 	playerindex = p1->index;
 	soc.close();
 }

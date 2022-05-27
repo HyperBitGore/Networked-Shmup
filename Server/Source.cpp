@@ -123,10 +123,10 @@ void connectListener() {
 		p.y = 400;
 		p.index = players.size();
 		players.push_back(p);
-		char indexbuf[4];
+		/*char indexbuf[4];
 		int* pit = (int*)indexbuf;
-		*pit = p.index;
-		soc.send(asio::buffer(indexbuf));
+		*pit = players.size()-1;
+		soc.send(asio::buffer(indexbuf));*/
 		/*asio::ip::udp::endpoint(remote_ad, 6892);
 		asio::ip::udp::endpoint(remote_ad, 6891);
 		en.recv = 
@@ -171,7 +171,7 @@ void writePlayers(asio::ip::udp::socket* soc, std::string ip) {
 			m += 12;
 			i++;
 			if (i >= players.size()) { 
-				*m = -1; 
+				*m = -52; 
 				//soc->send_to(asio::buffer(buf), en1, 0, er1); 
 				break; 
 			}
@@ -193,7 +193,7 @@ void recieveData(asio::ip::udp::socket* soc, std::string ip) {
 	int* mp;
 	float* mf;
 	m++;
-	switch (m[0]) {
+	switch (buf[0]) {
 	case PLAYERPOS:
 		mp = (int*)m;
 		mf = (float*)m;
@@ -201,6 +201,7 @@ void recieveData(asio::ip::udp::socket* soc, std::string ip) {
 		players[*mp].x = *mf;
 		mf++;
 		players[*mp].y = *mf;
+		std::cout << "Editing player " << *mp << "\n";
 		break;
 	}
 }
@@ -233,12 +234,13 @@ int main() {
 	asio::ip::udp::socket recv(io);
 	asio::ip::udp::socket sendv(io);
 	recv.open(asio::ip::udp::v4());
-	asio::ip::udp::endpoint en1(asio::ip::udp::v4(), 6892);
+	asio::ip::udp::endpoint en1(asio::ip::udp::v4(), 6891);
 	recv.bind(en1);
 
 	sendv.open(asio::ip::udp::v4());
 	asio::ip::udp::endpoint en2(asio::ip::udp::v4(), 7000);
-	sendv.bind(en2);
+	//sendv.bind(en2);
+	
 	//std::thread recieve(recieveData, &recvsoc);
 	//thread to write data
 	while (!exitf) {

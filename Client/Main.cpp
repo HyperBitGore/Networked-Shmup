@@ -10,10 +10,6 @@ std::vector<Player> players;
 std::vector<Bullet> bullets;
 std::vector<Entity> walls;
 
-//recvsoc invalid argument supplied might be from running server and client on same pc, test hosting on another pc; https://marc.info/?l=boost-users&m=122746978108299
-//fix player index not being sent on connect
-//fix server getting hung on recieve
-//recieve players positions
 //recieve bullets positions
 //recieve player deaths
 //recieve bullets deaths
@@ -53,7 +49,7 @@ void recieveData(std::string curip) {
 			
 				break;
 		case PLAYERPOS:
-			for (int i = 1; i < 121 && buf[i] != -1; i += 12) {
+			for (int i = 1; i < 121 && buf[i] != -52; i += 12) {
 				if (*mp != playerindex) {
 					mf = (float*)mp;
 					mf++;
@@ -96,13 +92,13 @@ int main() {
 	std::cout << std::endl;
 	asio::io_context io;
 	Game::connectToServer(ip, players, bullets, &p1);
-	
+	bullets;
+
 	asio::ip::udp::endpoint sendip(asio::ip::address::from_string(ip), 6891);
-	
 	asio::ip::udp::socket sendsoc(io);
 	asio::error_code ignore1;
 	sendsoc.open(asio::ip::udp::v4(), ignore1);
-	sendsoc.bind(asio::ip::udp::endpoint(asio::ip::udp::v4(), 6891), ignore1);
+	//sendsoc.bind(asio::ip::udp::endpoint(asio::ip::udp::v4(), 6891), ignore1);
 	//sendsoc.connect(sendip);
 	std::cerr << ignore1.message() << std::endl;
 	std::thread datathread(recieveData, ip);
@@ -135,7 +131,7 @@ int main() {
 	char movebuf[129];
 	char shootbuf[20];
 	//testing vars
-	p1.index = 0;
+	//p1.index = 0;
 	while (!exitf) {
 		try {
 			while (SDL_PollEvent(&e)) {
@@ -172,7 +168,7 @@ int main() {
 			mf++;
 			*mf = p1.y;
 			m += 9;
-			*m = -1;
+			*m = -52;
 			sendsoc.send_to(asio::buffer(movebuf), sendip);
 
 			//rendering the players
