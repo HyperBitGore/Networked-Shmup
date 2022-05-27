@@ -4,13 +4,15 @@ bool exitf = false;
 Gore gore;
 std::string ip;
 int playerindex = 0;
-
 //will be populated from server connect event
 //players will contain every other player besides local one
 std::vector<Player> players;
 std::vector<Bullet> bullets;
 std::vector<Entity> walls;
 
+//recvsoc invalid argument supplied might be from running server and client on same pc, test hosting on another pc; https://marc.info/?l=boost-users&m=122746978108299
+//fix player index not being sent on connect
+//fix server getting hung on recieve
 //recieve players positions
 //recieve bullets positions
 //recieve player deaths
@@ -21,17 +23,21 @@ std::vector<Entity> walls;
 void recieveData(std::string curip) {
 	char buf[121];
 	asio::io_context io;
-	asio::ip::udp::endpoint endpoi(asio::ip::address::from_string(curip), 6892);
+	//asio::ip::udp::endpoint endpoi(asio::ip::address::from_string(curip), 6892);
 	asio::ip::udp::socket recvsoc(io);
 	asio::error_code ec1;
 	recvsoc.open(asio::ip::udp::v4(), ec1);
-	recvsoc.bind(endpoi, ec1);
-	recvsoc.connect(endpoi);
+	std::cerr << ec1.message() << std::endl;
+	//asio::ip::udp::endpoint en1(asio::ip::udp::v4(), 6892);
+	//recvsoc.bind(asio::ip::udp::endpoint(asio::ip::udp::v4(), 6892), ec1);
+	recvsoc.bind(asio::ip::udp::endpoint(asio::ip::address::from_string(curip), 6892));
+	//recvsoc.connect(endpoi, ec1);
 	std::cerr << ec1.message() << std::endl;
 	bool exitl = false;
 	while (!exitl) {
 		//receive data from server
-		recvsoc.receive(asio::buffer(buf));
+		recvsoc.receive(asio::buffer(buf), 0, ec1);
+		std::cerr << ec1.message() << std::endl;
 		char* m = buf;
 		m++;
 		int* mp = (int*)m;
@@ -74,7 +80,6 @@ int main() {
 	if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 4, 2048) < 0) {
 		std::cout << "Mix failed to init" << Mix_GetError() << std::endl;
 	}
-	asio::io_context io;
 	Player p1;
 	p1.w = 50;
 	p1.h = 50;
@@ -89,15 +94,18 @@ int main() {
 	std::cout << "Input server IP ";
 	std::cin >> ip;
 	std::cout << std::endl;
-
+	asio::io_context io;
 	Game::connectToServer(ip, players, bullets, &p1);
+	
 	asio::ip::udp::endpoint sendip(asio::ip::address::from_string(ip), 6891);
+	
 	asio::ip::udp::socket sendsoc(io);
 	asio::error_code ignore1;
 	sendsoc.open(asio::ip::udp::v4(), ignore1);
-	sendsoc.bind(sendip, ignore1);
-	sendsoc.connect(sendip);
+	sendsoc.bind(asio::ip::udp::endpoint(asio::ip::udp::v4(), 6891), ignore1);
+	//sendsoc.connect(sendip);
 	std::cerr << ignore1.message() << std::endl;
+	std::thread datathread(recieveData, ip);
 
 	SDL_Window* window;
 	SDL_Renderer* rend;
@@ -118,14 +126,13 @@ int main() {
 	//vector of timers that corresponds to bullets by index
 	std::vector<TimerObject> btimers;
 	
-	std::thread datathread(recieveData, ip);
 	//recieveData(ip);
 	//loop variables
 	double delta;
 	SDL_Event e;
 	const Uint8* keys;
 	keys = SDL_GetKeyboardState(NULL);
-	char movebuf[13];
+	char movebuf[129];
 	char shootbuf[20];
 	//testing vars
 	p1.index = 0;
@@ -164,7 +171,9 @@ int main() {
 			*mf = p1.x;
 			mf++;
 			*mf = p1.y;
-			sendsoc.send(asio::buffer(movebuf));
+			m += 9;
+			*m = -1;
+			sendsoc.send_to(asio::buffer(movebuf), sendip);
 
 			//rendering the players
 			SDL_SetRenderDrawColor(rend, 255, 50, 50, 0);

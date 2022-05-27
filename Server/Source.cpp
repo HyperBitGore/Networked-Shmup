@@ -35,6 +35,7 @@ bool exitf = false;
 std::vector<Player> players;
 std::vector<Bullet> bullets;
 std::vector<std::string> endpoints;
+asio::io_context io;
 
 char* serilizeStruct(char* ptr, int size) {
 	char* mt = (char*)std::malloc(size);
@@ -55,7 +56,7 @@ void deserilizeStruct(char* dest, char* data, int size) {
 
 //listens to connections and adds to socket list
 void connectListener() {
-	asio::io_context io;
+	//asio::io_context io;
 	while (!exitf) {
 		asio::ip::tcp::acceptor accept(io, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), 6890));
 		asio::error_code ec;
@@ -152,8 +153,9 @@ void writeBullets() {
 void writePlayers(asio::ip::udp::socket* soc, std::string ip) {
 	char buf[121];
 	buf[0] = PLAYERPOS;
-	asio::ip::udp::endpoint en1(asio::ip::address::from_string(ip), 6891);
-	soc->bind(en1);
+	asio::ip::udp::endpoint en1(asio::ip::address::from_string(ip), 6892);
+	asio::error_code er1;
+	//soc->bind(en1);
 	for (int i = 0; i < players.size(); i++) {
 		char* m = buf;
 		m++;
@@ -168,17 +170,24 @@ void writePlayers(asio::ip::udp::socket* soc, std::string ip) {
 			pos++;
 			m += 12;
 			i++;
-			if (i >= players.size() && i != 0) { *m = -1; soc->send_to(asio::buffer(buf), en1); break; }
+			if (i >= players.size()) { 
+				*m = -1; 
+				//soc->send_to(asio::buffer(buf), en1, 0, er1); 
+				break; 
+			}
 		}
-		soc->send_to(asio::buffer(buf), en1);
+		std::cerr << er1.message() << "\n";
+		soc->send_to(asio::buffer(buf), en1, 0, er1);
+		std::cerr << er1.message() << "\n";
 		std::cout << "Wrote data to " << ip << "\n";
 	}
 }
 void recieveData(asio::ip::udp::socket* soc, std::string ip) {
 	char buf[129];
-	asio::ip::udp::endpoint en1(asio::ip::address::from_string(ip), 6892);
-	soc->bind(en1);
-	soc->receive_from(asio::buffer(buf), en1);
+	asio::ip::udp::endpoint end(asio::ip::address::from_string(ip), 6891);
+	asio::error_code ec;
+	soc->receive(asio::buffer(buf), 0, ec);
+	std::cerr << ec.message() << "\n";
 	std::cout << "Recieved data from " << ip << "\n";
 	char* m = buf;
 	int* mp;
@@ -220,20 +229,24 @@ int main() {
 	b2.trajy = 0.1;
 	bullets.push_back(b2);*/
 	endpoints.reserve(100);
-	asio::io_context io;
 	std::thread listener(connectListener);
 	asio::ip::udp::socket recv(io);
 	asio::ip::udp::socket sendv(io);
 	recv.open(asio::ip::udp::v4());
+	asio::ip::udp::endpoint en1(asio::ip::udp::v4(), 6892);
+	recv.bind(en1);
+
 	sendv.open(asio::ip::udp::v4());
+	asio::ip::udp::endpoint en2(asio::ip::udp::v4(), 7000);
+	sendv.bind(en2);
 	//std::thread recieve(recieveData, &recvsoc);
 	//thread to write data
 	while (!exitf) {
 		//write data needed for each socket
 		//std::cout << endpoints.size() << "\n";
 		for (auto& i : endpoints) {
-			recieveData(&recv, i);
 			writePlayers(&sendv, i);
+			recieveData(&recv, i);
 		}
 
 	}
