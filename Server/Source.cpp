@@ -191,7 +191,7 @@ void writeBullets(asio::ip::udp::socket* soc, std::string ip) {
 			m += 12;
 			i++;
 			if (i >= bullets.size()) {
-				*m = -53;
+				*m = -52;
 				break;
 			}
 		}
@@ -222,7 +222,7 @@ void writePlayers(asio::ip::udp::socket* soc, std::string ip) {
 			m += 12;
 			i++;
 			if (i >= players.size()) { 
-				*m = -53; 
+				*m = -52; 
 				//soc->send_to(asio::buffer(buf), en1, 0, er1); 
 				break; 
 			}

@@ -10,6 +10,8 @@ std::vector<Player> players;
 std::vector<Bullet> bullets;
 std::vector<Entity> walls;
 
+//fix server stack corruption
+//Fix server crash on new player join
 //recieve player deaths
 //recieve bullets deaths
 //add camera
@@ -39,13 +41,14 @@ void recieveData(std::string curip) {
 		float* mf;
 		switch (buf[0]) {
 		case BULLETPOS:
-			for (int i = 1; i < 121 && buf[i] != -53; i += 12) {
+			for (int i = 1; i < 121 && buf[i] != -52; i += 12) {
 				if (*mp < bullets.size()) {
 					mf = (float*)mp;
 					mf++;
 					bullets[*mp].x = *mf;
 					mf++;
 					bullets[*mp].y = *mf;
+					mp += 3;
 				}
 				else {
 					*mp += 3;
@@ -54,7 +57,7 @@ void recieveData(std::string curip) {
 			}
 				break;
 		case PLAYERPOS:
-			for (int i = 1; i < 121 && buf[i] != -53; i += 12) {
+			for (int i = 1; i < 121 && buf[i] != -52; i += 12) {
 				if (*mp != playerindex && *mp < players.size()) {
 					mf = (float*)mp;
 					mf++;
@@ -166,7 +169,6 @@ int main() {
 	char shootbuf[121];
 	int mx, my;
 	//testing vars
-	//p1.index = 0;
 	while (!exitf) {
 		try {
 			while (SDL_PollEvent(&e)) {
@@ -223,7 +225,7 @@ int main() {
 			mf++;
 			*mf = p1.y;
 			m += 9;
-			*m = -53;
+			*m = -52;
 			sendsoc.send_to(asio::buffer(movebuf), sendip);
 
 			//rendering the players
