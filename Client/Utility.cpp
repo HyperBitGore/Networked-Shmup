@@ -16,6 +16,7 @@ void Game::connectToServer(std::string ip, std::vector<Player>& players, std::ve
 	soc.connect(socend);
 	//read all the data it sends
 	bool notread = true;
+	bool skipcur = false;
 	char mode = 0;
 	char buf[28];
 	while (notread) {
@@ -27,24 +28,36 @@ void Game::connectToServer(std::string ip, std::vector<Player>& players, std::ve
 			for (int i = 0; i < 28; i++) {
 				if (buf[i] == -1) {
 					mode = 1;
+					skipcur = true;
 					break;
 				}
 			}
-			gore.deserilizeStruct((char*)&p, buf, 24);
-			std::cout << buf << "\n";
-			players.push_back(p);
+			if (!skipcur) {
+				gore.deserilizeStruct((char*)&p, buf, 24);
+				std::cout << buf << "\n";
+				players.push_back(p);
+			}
+			else {
+				skipcur = false;
+			}
 			break;
 		case 1:
 			//have to do this because bullet data can get out of order
 			for (int i = 0; i < 28; i++) {
 				if (buf[i] == -1) {
 					notread = false;
+					skipcur = true;
 					break;
 				}
 			}
-			gore.deserilizeStruct((char*)&b, buf, 28);
-			std::cout << buf << "\n";
-			bullets.push_back(b);
+			if (!skipcur) {
+				gore.deserilizeStruct((char*)&b, buf, 28);
+				std::cout << buf << "\n";
+				bullets.push_back(b);
+			}
+			else {
+				skipcur = false;
+			}
 			break;
 		}
 	}

@@ -336,6 +336,16 @@ char* Gore::serilizeStruct(char* ptr, int size) {
 	}
 	return mt;
 }
+//overload 1, used for char arrays, so no use of malloc, make sure output array is big enough to hold size
+void Gore::serilizeStruct(char *ptr, char output[], int size) {
+	//char* mt = (char*)std::malloc(size);
+	for (int i = 0; i < size; i++) {
+		output[i] = *ptr;
+		ptr++;
+	}
+}
+
+//
 void Gore::deserilizeStruct(char* dest, char* data, int size) {
 	for (int i = 0; i < size; i++) {
 		*dest = data[i];

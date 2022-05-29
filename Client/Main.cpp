@@ -8,11 +8,8 @@ int playerindex = 0;
 //players will contain every other player besides local one
 std::vector<Player> players;
 std::vector<Bullet> bullets;
-//vector of timers that corresponds to bullets by index
-std::vector<TimerObject> btimers;
 std::vector<Entity> walls;
 
-//recieve bullets positions
 //recieve player deaths
 //recieve bullets deaths
 //add camera
@@ -35,20 +32,14 @@ void recieveData(std::string curip) {
 	while (!exitl) {
 		//receive data from server
 		recvsoc.receive(asio::buffer(buf), 0, ec1);
-		std::cerr << ec1.message() << std::endl;
+		//std::cerr << ec1.message() << std::endl;
 		char* m = buf;
 		m++;
 		int* mp = (int*)m;
 		float* mf;
 		switch (buf[0]) {
-		case NEWPLAYER:
-				//maybe move this to a tcp connection
-			break;
-		case NEWBULLET:
-			
-				break;
 		case BULLETPOS:
-			for (int i = 1; i < 121 && buf[i] != -52; i += 12) {
+			for (int i = 1; i < 121 && buf[i] != -53; i += 12) {
 				if (*mp < bullets.size()) {
 					mf = (float*)mp;
 					mf++;
@@ -63,7 +54,7 @@ void recieveData(std::string curip) {
 			}
 				break;
 		case PLAYERPOS:
-			for (int i = 1; i < 121 && buf[i] != -52; i += 12) {
+			for (int i = 1; i < 121 && buf[i] != -53; i += 12) {
 				if (*mp != playerindex && *mp < players.size()) {
 					mf = (float*)mp;
 					mf++;
@@ -79,6 +70,26 @@ void recieveData(std::string curip) {
 		}
 	}
 }
+void tcpRECV(asio::ip::tcp::socket* soc) {
+	char buf[121];
+	while (!exitf) {
+		soc->receive(asio::buffer(buf));
+		Player outp;
+		Bullet outb;
+		switch (buf[120]) {
+		case NEWPLAYER:
+			gore.deserilizeStruct((char*)&outp, buf, 24);
+			players.push_back(outp);
+			break;
+		case NEWBULLET:
+			gore.deserilizeStruct((char*)&outb, buf, 28);
+			bullets.push_back(outb);
+			break;
+		}
+	}
+}
+
+
 
 int main() {
 	if (SDL_Init(SDL_INIT_EVENTS | SDL_INIT_AUDIO | SDL_INIT_VIDEO) > 0) {
@@ -102,7 +113,6 @@ int main() {
 	players.reserve(100);
 	bullets.reserve(1000);
 	walls.reserve(100);
-	btimers.reserve(1000);
 
 	//server connection
 	std::string ip;
@@ -111,8 +121,13 @@ int main() {
 	std::cout << std::endl;
 	asio::io_context io;
 	Game::connectToServer(ip, players, bullets, &p1);
-	bullets;
+	//tcp socket used for new bullets and new players added
+	asio::ip::tcp::socket tcprecv(io);
+	asio::ip::tcp::endpoint tcpendp(asio::ip::address::from_string(ip), 6890);
+	//tcp socket is automatically opened and we don't have to bind like a udp listener
+	tcprecv.connect(tcpendp);
 
+	//udp socket used for write operations
 	asio::ip::udp::endpoint sendip(asio::ip::address::from_string(ip), 6891);
 	asio::ip::udp::socket sendsoc(io);
 	asio::error_code ignore1;
@@ -121,6 +136,7 @@ int main() {
 	//sendsoc.connect(sendip);
 	std::cerr << ignore1.message() << std::endl;
 	std::thread datathread(recieveData, ip);
+	std::thread tcpthread(tcpRECV, &tcprecv);
 
 	SDL_Window* window;
 	SDL_Renderer* rend;
@@ -147,6 +163,7 @@ int main() {
 	const Uint8* keys;
 	keys = SDL_GetKeyboardState(NULL);
 	char movebuf[129];
+	char shootbuf[121];
 	int mx, my;
 	//testing vars
 	//p1.index = 0;
@@ -177,8 +194,20 @@ int main() {
 				p1.x -= 200 * delta;
 			}
 			if (shootimer > 0.1) {
-				if (SDL_GetMouseState(&mx, &my) | SDL_BUTTON(SDL_BUTTON_LEFT)) {
-					//send bullet creation packet to server, might wanna use 
+				if (SDL_GetMouseState(&mx, &my) & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+					std::cout << "Shot\n";
+					//send bullet creation packet to server, maybe break off thread or have a thread pool do this
+					shootbuf[120] = NEWBULLET;
+					Bullet b;
+					b.h = 10;
+					b.w = 10;
+					b.x = p1.x + 25;
+					b.y = p1.y + 25;
+					b.index = bullets.size();
+					Game::calcSlope(p1.x, p1.y, mx, my, &b.trajx, &b.trajy);
+					char* data = (char*)&b;
+					gore.serilizeStruct(data, shootbuf, 28);
+					tcprecv.send(asio::buffer(shootbuf));
 					shootimer = 0;
 				}
 			}
@@ -194,7 +223,7 @@ int main() {
 			mf++;
 			*mf = p1.y;
 			m += 9;
-			*m = -52;
+			*m = -53;
 			sendsoc.send_to(asio::buffer(movebuf), sendip);
 
 			//rendering the players
@@ -214,11 +243,7 @@ int main() {
 			SDL_SetRenderDrawColor(rend, 0, 50, 255, 0);
 			for (int i = 0; i < bullets.size(); ) {
 				bool erase = false;
-				//btimers[i].time += (float)delta;
-				//if (btimers[i].time >= btimers[i].maxtime) {
-					//bullets[i].x += bullets[i].trajx;
-					//bullets[i].y += bullets[i].trajy;
-				//}
+				//move this to server
 				for (int j = 0; j < players.size(); j++) {
 					if (j != bullets[i].index && Game::isColliding(&bullets[i], &players[j])) {
 						//damage that player and send packet to server, to damage player and delete bullet
@@ -229,7 +254,6 @@ int main() {
 				SDL_RenderFillRect(rend, &rect);
 				if (erase) {
 					bullets.erase(bullets.begin() + i);
-					//btimers.erase(btimers.begin() + i);
 				}
 				else {
 					i++;
@@ -244,6 +268,10 @@ int main() {
 			std::cout << "exception: " << epp.what() << "\n";
 		}
 	}
+	shootbuf[120] = CLOSE;
+	tcprecv.send(asio::buffer(shootbuf));
+	tcprecv.close();
 	datathread.join();
+	tcpthread.join();
 	return 0;
 }

@@ -23,18 +23,36 @@ struct Bullet : Entity {
 	//index of player it was fired from
 	UINT32 index;
 };
-struct END {
-	std::string recv;
-	std::string send;
+class Timer {
+private:
+	std::chrono::time_point<std::chrono::steady_clock> start;
+	std::chrono::time_point<std::chrono::steady_clock> end;
+public:
+	void startTime() {
+		start = std::chrono::steady_clock::now();
+	}
+	double getTime() {
+		end = std::chrono::steady_clock::now();
+		return std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+	}
+	void resetTime() {
+		start = std::chrono::steady_clock::now();
+		end = std::chrono::steady_clock::now();
+	}
 };
 
+
 //bulletpos and playerpos both large packets containting pos data for all bullets and players
-enum {NEWPLAYER = 24, NEWBULLET, BULLETPOS, PLAYERPOS};
+enum {NEWPLAYER = 24, NEWBULLET, BULLETPOS, PLAYERPOS, CLOSE};
 
 bool exitf = false;
 std::vector<Player> players;
 std::vector<Bullet> bullets;
+std::vector<Timer> btimes;
 std::vector<std::string> endpoints;
+std::vector<asio::ip::tcp::socket*> tcpsocs;
+std::mutex tcpmutex;
+std::mutex bulletmutex;
 asio::io_context io;
 
 char* serilizeStruct(char* ptr, int size) {
@@ -44,6 +62,13 @@ char* serilizeStruct(char* ptr, int size) {
 		ptr++;
 	}
 	return mt;
+}
+//overload 1, used for char arrays, so no use of malloc, make sure output array is big enough to hold size
+void serilizeStruct(char* ptr, char output[], int size) {
+	for (int i = 0; i < size; i++) {
+		output[i] = *ptr;
+		ptr++;
+	}
 }
 void deserilizeStruct(char* dest, char* data, int size) {
 	for (int i = 0; i < size; i++) {
@@ -80,7 +105,7 @@ void connectListener() {
 				std::cout << "Writing player to " << ipstring << "\n";
 				std::cout << "Writing: " << outbuf << "\n";
 				soc.send(asio::buffer(outbuf));
-
+				std::free(buf);
 			}
 			outbuf[0] = -1;
 			soc.send(asio::buffer(outbuf));
@@ -103,6 +128,7 @@ void connectListener() {
 				std::cout << "Writing bullet to " << ipstring << "\n";
 				std::cout << "Writing: " << outbuf << "\n";
 				soc.send(asio::buffer(outbuf));
+				std::free(buf);
 
 			}
 			outbuf[0] = -1;
@@ -126,17 +152,27 @@ void connectListener() {
 		endpoints.push_back(ipstring);
 		std::cout << endpoints.size() << std::endl;
 		soc.close();
+		//write new player to every other connection
+		tcpmutex.lock();
+		char pbuf[121];
+		pbuf[120] = NEWPLAYER;
+		for (int i = 0; i < tcpsocs.size(); i++) {
+			serilizeStruct((char*)&p, pbuf, 24);
+			tcpsocs[i]->send(asio::buffer(pbuf));
+		}
+		tcpmutex.unlock();
+		//tcp data recieving connection
+		asio::ip::tcp::socket* newsoc = new asio::ip::tcp::socket(io);
+		accept.listen();
+		accept.accept(*newsoc);
+		tcpsocs.push_back(newsoc);
 	}
 }
 
-void writenewPlayer() {
-	//maybe just serilize the struct 
-}
-void writenewBullet() {
-	//do same thing as player
-}
+
 void writeBullets(asio::ip::udp::socket* soc, std::string ip) {
 	//write a bunch of small packets, will be more effiecent
+	bulletmutex.lock();
 	asio::ip::udp::endpoint en1(asio::ip::address::from_string(ip), 6892);
 	asio::error_code er1;
 	char buf[121];
@@ -155,7 +191,7 @@ void writeBullets(asio::ip::udp::socket* soc, std::string ip) {
 			m += 12;
 			i++;
 			if (i >= bullets.size()) {
-				*m = -52;
+				*m = -53;
 				break;
 			}
 		}
@@ -164,6 +200,7 @@ void writeBullets(asio::ip::udp::socket* soc, std::string ip) {
 		std::cerr << er1.message() << "\n";
 		std::cout << "Wrote data to " << ip << "\n";
 	}
+	bulletmutex.unlock();
 }
 void writePlayers(asio::ip::udp::socket* soc, std::string ip) {
 	char buf[121];
@@ -185,7 +222,7 @@ void writePlayers(asio::ip::udp::socket* soc, std::string ip) {
 			m += 12;
 			i++;
 			if (i >= players.size()) { 
-				*m = -52; 
+				*m = -53; 
 				//soc->send_to(asio::buffer(buf), en1, 0, er1); 
 				break; 
 			}
@@ -210,30 +247,93 @@ void recieveData(asio::ip::udp::socket* soc, std::string ip) {
 	switch (buf[0]) {
 	case PLAYERPOS:
 		mp = (int*)m;
-		mf = (float*)m;
-		mf++;
-		players[*mp].x = *mf;
-		mf++;
-		players[*mp].y = *mf;
-		std::cout << "Editing player " << *mp << "\n";
+		if (*mp < players.size()) {
+			mf = (float*)m;
+			mf++;
+			players[*mp].x = *mf;
+			mf++;
+			players[*mp].y = *mf;
+			std::cout << "Editing player " << *mp << "\n";
+		}
 		break;
 	case BULLETPOS:
 		mp = (int*)m;
-		mf = (float*)m;
-		mf++;
-		bullets[*mp].x = *mf;
-		mf++;
-		bullets[*mp].y = *mf;
-		std::cout << "Editing bullet " << *mp << "\n";
+		if (*mp < bullets.size()) {
+			mf = (float*)m;
+			mf++;
+			bullets[*mp].x = *mf;
+			mf++;
+			bullets[*mp].y = *mf;
+			std::cout << "Editing bullet " << *mp << "\n";
+		}
 		break;
 	}
 }
+
+void tcpRecv() {
+	char buf[121];
+	while (!exitf) {
+		tcpmutex.lock();
+		bool it = true;
+		for (int i = 0; i < tcpsocs.size();) {
+			it = true;
+			if (tcpsocs[i]->available() > 20) {
+				tcpsocs[i]->receive(asio::buffer(buf));
+				//for safety if a weird value somehow gets passed to this socket
+				if (buf[120] == NEWBULLET) {
+					Bullet b1;
+					char* out = (char*)&b1;
+					deserilizeStruct(out, buf, 28);
+					Timer timer1;
+					timer1.startTime();
+					btimes.push_back(timer1);
+					bullets.push_back(b1);
+					//now write new bullet to all tcp sockets
+					//just write recieved packet to rest of tcp sockets
+					for (int j = 0; j < tcpsocs.size(); j++) {
+						//if (j != i) {
+						tcpsocs[j]->send(asio::buffer(buf));
+						
+					}
+				}
+				else if (buf[120] == CLOSE) {
+					tcpsocs[i]->close();
+					delete tcpsocs[i];
+					tcpsocs.erase(tcpsocs.begin() + i);
+					it = false;
+				}
+			}
+			if (it) {
+				i++;
+			}
+		}
+		tcpmutex.unlock();
+	}
+}
+void simulateLogic() {
+	while (!exitf) {
+		bulletmutex.lock();
+		for (int i = 0; i < bullets.size(); i++) {
+			if (btimes[i].getTime() > 25) {
+				bullets[i].x += -bullets[i].trajx;
+				bullets[i].y += -bullets[i].trajy;
+				btimes[i].resetTime();
+			}
+		}
+		bulletmutex.unlock();
+	}
+}
+
 
 int main() {
 	srand(time(NULL));
 	//doing this to avoid moving of memory block
 	players.reserve(100);
 	bullets.reserve(1000);
+	btimes.reserve(1000);
+	tcpsocs.reserve(100);
+	endpoints.reserve(100);
+	//tcpmutex.unlock();
 	/*Bullet b1;
 	b1.w = 10;
 	b1.h = 10;
@@ -252,7 +352,8 @@ int main() {
 	b2.trajx = 0.2;
 	b2.trajy = 0.1;
 	bullets.push_back(b2);*/
-	endpoints.reserve(100);
+
+
 	std::thread listener(connectListener);
 	asio::ip::udp::socket recv(io);
 	asio::ip::udp::socket sendv(io);
@@ -264,17 +365,26 @@ int main() {
 	asio::ip::udp::endpoint en2(asio::ip::udp::v4(), 7000);
 	//sendv.bind(en2);
 	
-	//std::thread recieve(recieveData, &recvsoc);
+	//thread to recieve tcp data
+	std::thread recieve(tcpRecv);
+	//thread for game logic
+	std::thread gamelogic(simulateLogic);
 	//thread to write data
 	while (!exitf) {
 		//write data needed for each socket
 		//std::cout << endpoints.size() << "\n";
 		for (auto& i : endpoints) {
 			writePlayers(&sendv, i);
+			writeBullets(&sendv, i);
 			recieveData(&recv, i);
 		}
 
 	}
 	listener.join();
-	//recieve.join();
+	recieve.join();
+	gamelogic.join();
+	for (auto& i : tcpsocs) {
+		i->close();
+	}
+	return 0;
 }

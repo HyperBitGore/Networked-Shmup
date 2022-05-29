@@ -25,12 +25,9 @@ struct Bullet : Entity {
 	//index of player it was fired from
 	Uint32 index;
 };
-struct TimerObject {
-	float time;
-	float maxtime;
-};
 
-enum { NEWPLAYER = 24, NEWBULLET, BULLETPOS, PLAYERPOS };
+
+enum { NEWPLAYER = 24, NEWBULLET, BULLETPOS, PLAYERPOS, CLOSE };
 
 class Game {
 private:
@@ -38,4 +35,16 @@ private:
 public:
 	static bool isColliding(Entity* e1, Entity* e2);
 	static void connectToServer(std::string ip, std::vector<Player>& players, std::vector<Bullet>& bullets, Player* p1);
+	static void calcSlope(int x1, int y1, int x2, int y2, float* dx, float* dy) {
+		int steps = std::max(abs(x1 - x2), abs(y1 - y2));
+		if (steps == 0) {
+			*dx = *dy = 0;
+			return;
+		}
+		*dx = (x1 - x2);
+		*dx /= steps;
+
+		*dy = (y1 - y2);
+		*dy /= steps;
+	}
 };

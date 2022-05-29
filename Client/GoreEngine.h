@@ -124,6 +124,7 @@ public:
 	SDL_Surface* createBloom(int w, int h, SDL_Color startcolor, float magnitude);
 	//memory related
 	char* serilizeStruct(char* ptr, int size);
+	void serilizeStruct(char* ptr, char output[], int size);
 	void deserilizeStruct(char* dest, char* data, int size);
 	//point system
 	bool* createPoints(SDL_Surface* surf);
