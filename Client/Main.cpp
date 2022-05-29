@@ -10,7 +10,6 @@ std::vector<Player> players;
 std::vector<Bullet> bullets;
 std::vector<Entity> walls;
 
-//fix server stack corruption
 //Fix server crash on new player join
 //recieve player deaths
 //recieve bullets deaths
@@ -64,6 +63,7 @@ void recieveData(std::string curip) {
 					players[*mp].x = *mf;
 					mf++;
 					players[*mp].y = *mf;
+					mp += 3;
 				}
 				else {
 					*mp += 3;
@@ -270,10 +270,11 @@ int main() {
 			std::cout << "exception: " << epp.what() << "\n";
 		}
 	}
-	shootbuf[120] = CLOSE;
-	tcprecv.send(asio::buffer(shootbuf));
-	tcprecv.close();
 	datathread.join();
 	tcpthread.join();
+	shootbuf[120] = CLOSE;
+	asio::error_code ec1;
+	tcprecv.send(asio::buffer(shootbuf), 0, ec1);
+	tcprecv.close();
 	return 0;
 }

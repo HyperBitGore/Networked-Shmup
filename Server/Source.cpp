@@ -180,7 +180,7 @@ void writeBullets(asio::ip::udp::socket* soc, std::string ip) {
 	for (int i = 0; i < bullets.size(); i++) {
 		char* m = buf;
 		m++;
-		for (int j = 1; j < 121; j++) {
+		for (int j = 1; j < 121; j+=12) {
 			int* ind = (int*)m;
 			*ind = bullets[i].index;
 			ind++;
