@@ -1,4 +1,5 @@
 #pragma once
+#define NOMINMAX
 #include <iostream>
 #include <WS2tcpip.h>
 #include <thread>
@@ -21,9 +22,16 @@ struct Entity {
 	int ID;
 };
 
-enum {PPOSITION = 28, BPOSITION, DISCONNECT, CONNECT};
+struct Bullet : Entity{
+	float trajx;
+	float trajy;
+};
+
+
+enum {PPOSITION = 28, BPOSITION, DISCONNECT, CONNECT, NEWBULLET};
 
 Gore::FreeList<Entity> players;
+std::vector<Bullet> bullets;
 
 void connectToServer(SOCKET* udpSock, SOCKET* tcpSock, sockaddr_in *server, Entity* player) {
 	std::string serverip;
@@ -121,6 +129,74 @@ void udpRcv(SOCKET udpSock, sockaddr_in server, int pid) {
 				players.insert(p);
 			}
 			break;
+		case BPOSITION:
+			tt = buf;
+			tt++;
+			ind = (int*)tt;
+			for (int i = 0; i < bullets.size(); i++) {
+				if (*ind == bullets[i].ID) {
+					ind++;
+					tpo = (float*)ind;
+					bullets[i].x = *tpo;
+					tpo++;
+					bullets[i].y = *tpo;
+					tpo++;
+					break;
+				}
+			}
+
+			break;
 		}
 	}
+}
+void tcpRcv(SOCKET tcpSock) {
+	fd_set master;
+	FD_ZERO(&master);
+	FD_SET(tcpSock, &master);
+	char buf[128];
+	while (true) {
+		fd_set copy = master;
+		int socksTo = select(0, &copy, nullptr, nullptr, nullptr);
+		if (socksTo >= 1) {
+			ZeroMemory(buf, 128);
+			recv(copy.fd_array[0], buf, 128, 0);
+			char* tt;
+			float* t;
+			int* tp;
+			Bullet b;
+			switch (buf[0]) {
+			case NEWBULLET:
+				tt = buf;
+				tt++;
+				t = (float*)tt;
+				b.x = *t;
+				t++;
+				b.y = *t;
+				t++;
+				b.trajx = *t;
+				t++;
+				b.trajy = *t;
+				t += 2;
+				tp = (int*)t;
+				b.ID = *tp;
+				b.w = 5;
+				b.h = 5;
+				bullets.push_back(b);
+				break;
+			}
+		}
+	}
+}
+
+void calcSlope(int x1, int y1, int x2, int y2, float* dx, float* dy) {
+	int steps = std::max(abs(x1 - x2), abs(y1 - y2));
+	if (steps == 0) {
+		*dx = *dy = 0;
+		return;
+	}
+	*dx = (x1 - x2);
+	*dx /= steps;
+
+	*dy = (y1 - y2);
+	*dy /= steps;
 }

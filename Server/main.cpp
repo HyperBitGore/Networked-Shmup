@@ -13,13 +13,36 @@ struct Entity {
 	int ID;
 	sockaddr_in addr;
 };
-
-
+struct Bullet {
+	float x;
+	float y;
+	float trajx;
+	float trajy;
+	int ID;
+	int PID;
+};
+class Timer {
+private:
+	std::chrono::time_point<std::chrono::steady_clock> start;
+	std::chrono::time_point<std::chrono::steady_clock> end;
+public:
+	void startTime() {
+		start = std::chrono::steady_clock::now();
+	}
+	double getTime() {
+		end = std::chrono::steady_clock::now();
+		return std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+	}
+	void resetTime() {
+		start = std::chrono::steady_clock::now();
+		end = std::chrono::steady_clock::now();
+	}
+};
 std::vector<sockaddr_in> addresses;
 std::vector<Entity> players;
+std::vector<Bullet> bullets;
 
-
-enum { PPOSITION = 28, BPOSITION, DISCONNECT, CONNECT};
+enum { PPOSITION = 28, BPOSITION, DISCONNECT, CONNECT, NEWBULLET};
 
 void tcpThread() {
 	fd_set master;
@@ -88,7 +111,39 @@ void tcpThread() {
 			}
 			else {
 				//recv data from socket
-				
+				recv(copy.fd_array[i], buf, 128, 0);
+				char* tt;
+				float* t;
+				int* tp;
+				Bullet b;
+				switch (buf[0]) {
+				case NEWBULLET:
+					tt = buf;
+					tt++;
+					t = (float*)tt;
+					b.x = *t;
+					t++;
+					b.y = *t;
+					t++;
+					b.trajx = *t;
+					t++;
+					b.trajy = *t;
+					t++;
+					tp = (int*)t;
+					b.PID = *tp;
+					b.ID = bullets.size();
+					bullets.push_back(b);
+					tt = buf;
+					tt++;
+					tp = (int*)tt;
+					tp += 5;
+					*tp = b.ID;
+					for (int j = 0; j < master.fd_count; j++) {
+						send(master.fd_array[j], buf, 128, 0);
+					}
+					break;
+				}
+
 			}
 		}
 	}
@@ -118,6 +173,8 @@ int main() {
 
 
 	bool exitf = false;
+	Timer btime;
+	btime.startTime();
 	char buf[128];
 	//break off seperate thread for tcp listening
 	std::thread tcpT(tcpThread);
@@ -133,7 +190,6 @@ int main() {
 			char clientIp[256];
 			ZeroMemory(clientIp, 256);
 			inet_ntop(AF_INET, &client.sin_addr, clientIp, 256);
-			
 			switch (buf[0]) {
 			case PPOSITION:
 				for (auto& i : addresses) {
@@ -141,6 +197,7 @@ int main() {
 				}
 				break;
 			case CONNECT:
+				//if this gets dropped client is screwed
 				for (auto& i : addresses) {
 					if (client.sin_addr.S_un.S_addr == i.sin_addr.S_un.S_addr && client.sin_port == i.sin_port) {
 						push = false;
@@ -171,7 +228,30 @@ int main() {
 				break;
 			}
 		}
-
+		//bullet updates
+		if (btime.getTime() > 25) {
+			for (int i = 0; i < bullets.size(); i++) {
+				ZeroMemory(buf, 128);
+				char* tt = buf;
+				buf[0] = BPOSITION;
+				tt++;
+				int* tp = (int*)tt;
+				*tp = bullets[i].ID;
+				tp++;
+				float* t = (float*)tp;
+				*t = bullets[i].x;
+				t++;
+				*t = bullets[i].y;
+				t++;
+				*t = bullets[i].trajx;
+				t++;
+				*t = bullets[i].trajy;
+				for (auto& i : addresses) {
+					sendto(in, buf, 128, 0, (sockaddr*)&i, sizeof(i));
+				}
+			}
+			btime.resetTime();
+		}
 	}
 	//close tcp listener
 	

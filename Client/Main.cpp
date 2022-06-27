@@ -35,9 +35,13 @@ int main() {
 	keys = SDL_GetKeyboardState(NULL);
 	Gore::DeltaTimer dt;
 
+
+	
 	std::thread udpRcvThread(udpRcv, udpSock, server, player.ID);
+	std::thread tcpRcvThread(tcpRcv, tcpSock);
 	//main loop
 	char buf[128];
+	double shootcool = 0;
 	while (!exitf) {
 		while (SDL_PollEvent(&e)) {
 			switch (e.type) {
@@ -47,6 +51,7 @@ int main() {
 			}
 		}
 		double delta = dt.getDelta();
+		shootcool += delta;
 		bool sendLoc = false;
 		SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
 		SDL_RenderClear(rend);
@@ -78,12 +83,40 @@ int main() {
 			*idn = player.ID;
 			sendto(udpSock, buf, 128, 0, (sockaddr*)&server, sizeof(server));
 		}
+		int mx, my;
+		if (SDL_GetMouseState(&mx, &my) & SDL_BUTTON(SDL_BUTTON_LEFT) && shootcool > 0.005) {
+			//send bullet creation data to server
+			buf[0] = NEWBULLET;
+			char* tt = buf;
+			tt++;
+			float* t = (float*)tt;
+			*t = player.x;
+			t++;
+			*t = player.y;
+			t++;
+			//calculate trajectory now
+			float dx, dy;
+			calcSlope(player.x, player.y, mx, my, &dx, &dy);
+			*t = dx;
+			t++;
+			*t = dy;
+			t++;
+			int* top = (int*)t;
+			*top = player.ID;
+			send(tcpSock, buf, 128, 0);
+			shootcool = 0;
+		}
+
 		SDL_SetRenderDrawColor(rend, 255, 25, 50, 255);
 		for (int i = 0; i < players.size(); i++) {
 			SDL_Rect rect = { players[i].x, players[i].y, players[i].w, players[i].h };
 			SDL_RenderFillRect(rend, &rect);
 		}
+		for (int i = 0; i < bullets.size(); i++) {
 
+			SDL_Rect rect = { bullets[i].x, bullets[i].y, bullets[i].w, bullets[i].h };
+			SDL_RenderFillRect(rend, &rect);
+		}
 		SDL_SetRenderDrawColor(rend, 50, 255, 100, 255);
 		SDL_Rect prect = { player.x, player.y, player.w, player.h };
 		SDL_RenderFillRect(rend, &prect);
@@ -95,6 +128,7 @@ int main() {
 	closesocket(udpSock);
 	closesocket(tcpSock);
 	udpRcvThread.join();
+	tcpRcvThread.join();
 	WSACleanup();
 	return 0;
 }
