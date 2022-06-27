@@ -1,6 +1,6 @@
 #include "GoreEngine.h"
 
-void Gore::insertTex(TexListMem*& tex, SDL_Texture* current, std::string name) {
+void Gore::Engine::insertTex(TexListMem*& tex, SDL_Texture* current, std::string name) {
 	texp t;
 	t = new TexListMem;
 	t->current = current;
@@ -9,7 +9,7 @@ void Gore::insertTex(TexListMem*& tex, SDL_Texture* current, std::string name) {
 	tex = t;
 }
 
-SDL_Texture* Gore::findTex(texp head, std::string name) {
+SDL_Texture* Gore::Engine::findTex(texp head, std::string name) {
 	texp temp = head;
 	while (temp != NULL) {
 		if (std::strcmp(temp->name.c_str(), name.c_str()) == 0) {
@@ -20,7 +20,7 @@ SDL_Texture* Gore::findTex(texp head, std::string name) {
 	return NULL;
 }
 
-void Gore::insertSprite(spxp& sp, SDL_Surface* surf, std::string name) {
+void Gore::Engine::insertSprite(spxp& sp, SDL_Surface* surf, std::string name) {
 	spxp t;
 	t = new SpriteListMem;
 	t->current = surf;
@@ -28,7 +28,7 @@ void Gore::insertSprite(spxp& sp, SDL_Surface* surf, std::string name) {
 	t->name = name;
 	sp = t;
 }
-SDL_Surface* Gore::findSprite(spxp sp, std::string name) {
+SDL_Surface* Gore::Engine::findSprite(spxp sp, std::string name) {
 	spxp temp = sp;
 	while (temp != NULL) {
 		if (temp->name.compare(name) == 0) {
@@ -41,33 +41,80 @@ SDL_Surface* Gore::findSprite(spxp sp, std::string name) {
 
 
 //Pixel manipulation
-void Gore::SetPixelSurface(SDL_Surface* surf, int* y, int* x, Uint32* pixel) {
+void Gore::Engine::SetPixelSurface(SDL_Surface* surf, int* y, int* x, Uint32* pixel) {
 	SDL_LockSurface(surf);
 	Uint32* pixels = (Uint32*)surf->pixels;
 	pixels[(*y * surf->w) + *x] = *pixel;
 	SDL_UnlockSurface(surf);
 }
-void Gore::SetPixelSurface(SDL_Surface* surf, int y, int x, Uint32 pixel) {
+void Gore::Engine::SetPixelSurface(SDL_Surface* surf, int y, int x, Uint32 pixel) {
 	SDL_LockSurface(surf);
 	Uint32* pixels = (Uint32*)surf->pixels;
 	pixels[(y * surf->w) + x] = pixel;
 	SDL_UnlockSurface(surf);
 }
+//put points you want to check into vector
+void Gore::Engine::massSetPixelSurface(SDL_Surface* surf, std::vector<Point> points, Uint32 Pixel) {
+	SDL_LockSurface(surf);
+	Uint32* pixels = (Uint32*)surf->pixels;
+	for (auto& i : points) {
+		pixels[(i.y * surf->w) + i.x] = Pixel;
+	}
+	SDL_UnlockSurface(surf);
+}
+//first point is top point and bt is bottom point where setting stops
+void Gore::Engine::massSetPixelSurface(SDL_Surface* surf, Point tp, Point bt, Uint32 Pixel) {
+	SDL_LockSurface(surf);
+	Uint32* pixels = (Uint32*)surf->pixels;
+	for (int i = tp.y; i < bt.y; i++) {
+		for (int j = tp.x; j < bt.x; j++) {
+			pixels[(i * surf->w) + j] = Pixel;
+		}
+	}
+	SDL_UnlockSurface(surf);
+}
+//give it two points to check in between against the pixel, will return false if that pixel color is found within set
+bool Gore::Engine::massGetPixelSurface(SDL_Surface* surf, Point tp, Point bt, Uint32 pixel) {
+	SDL_LockSurface(surf);
+	Uint32* pixels = (Uint32*)surf->pixels;
+	for (int i = tp.y; i < bt.y; i++) {
+		for (int j = tp.x; j < bt.x; j++) {
+			if (pixels[i * surf->w + j] == pixel) {
+				return false;
+			}
+		}
+	}
+	SDL_UnlockSurface(surf);
+	return true;
+}
+//give it set of points to check against the pixel, will return false if that pixel color is found within set
+bool Gore::Engine::massGetPixelSurface(SDL_Surface* surf, std::vector<Point> points, Uint32 pixel) {
+	SDL_LockSurface(surf);
+	Uint32* pixels = (Uint32*)surf->pixels;
+	for (auto& i : points) {
+		if (pixels[i.y * surf->w + i.x] == pixel) {
+			return false;
+		}
+	}
+	SDL_UnlockSurface(surf);
+	return true;
+}
 
-Uint32 Gore::GetPixelSurface(SDL_Surface* surf, int* y, int* x) {
+
+Uint32 Gore::Engine::GetPixelSurface(SDL_Surface* surf, int* y, int* x) {
 	SDL_LockSurface(surf);
 	Uint32* pixels = (Uint32*)surf->pixels;
 	SDL_UnlockSurface(surf);
 	return pixels[*y * surf->w + *x];
 }
-void Gore::SetPixelSurfaceColorRGBA(SDL_Surface* surf, int* y, int* x, SDL_Color* color) {
+void Gore::Engine::SetPixelSurfaceColorRGBA(SDL_Surface* surf, int* y, int* x, SDL_Color* color) {
 	SDL_LockSurface(surf);
 	Uint32* pixels = (Uint32*)surf->pixels;
 	Uint32* pixel = pixels + (*y * surf->w) + *x;
 	*pixel = SDL_MapRGBA(surf->format, color->r, color->g, color->b, color->a);
 	SDL_UnlockSurface(surf);
 }
-void Gore::SetPixelSurfaceColorRGB(SDL_Surface* surf, int* y, int* x, SDL_Color* color) {
+void Gore::Engine::SetPixelSurfaceColorRGB(SDL_Surface* surf, int* y, int* x, SDL_Color* color) {
 	SDL_LockSurface(surf);
 	Uint32* pixels = (Uint32*)surf->pixels;
 	Uint32* pixel = pixels + (*y * surf->w) + *x;
@@ -75,40 +122,91 @@ void Gore::SetPixelSurfaceColorRGB(SDL_Surface* surf, int* y, int* x, SDL_Color*
 	SDL_UnlockSurface(surf);
 }
 
-Uint32 Gore::ConvertColorToUint32RGB(SDL_Color color, SDL_PixelFormat* format) {
+Uint32 Gore::Engine::ConvertColorToUint32RGB(SDL_Color color, SDL_PixelFormat* format) {
 	return SDL_MapRGB(format, color.r, color.g, color.b);
 }
-Uint32 Gore::ConvertColorToUint32RGBA(SDL_Color color, SDL_PixelFormat* format) {
+Uint32 Gore::Engine::ConvertColorToUint32RGBA(SDL_Color color, SDL_PixelFormat* format) {
 	return SDL_MapRGBA(format, color.r, color.g, color.b, color.a);
 }
-void Gore::clearSurface(SDL_Surface* surf) {
+void Gore::Engine::clearSurface(SDL_Surface* surf) {
 	SDL_LockSurface(surf);
 	memset(surf->pixels, 0, (surf->w * surf->h) * surf->format->BytesPerPixel);
 	SDL_UnlockSurface(surf);
 }
-void Gore::clearTexture(SDL_Texture* tex, int* pitch, int w, int h) {
+void Gore::Engine::clearTexture(SDL_Texture* tex, int* pitch, int w, int h) {
 	Uint32* pixels;
 	SDL_LockTexture(tex, NULL, (void**)&pixels, pitch);
 	memset(pixels, 0, (w * h) * (sizeof(pixels)));
 	SDL_UnlockTexture(tex);
 }
 //Texture has to be made with SDL_TEXTUREACCESS_STREAMING flag
+//Texture editing is extremely slow because we have to get data from gpu, so try to do a large amount of them at once
 //Have to divide the pitch by sizeof(unsigned int) to get proper x and y 
-void Gore::SetPixelTexture(SDL_Texture* tex, int* y, int* x, Uint32* pixel, int* pitch) {
+void Gore::Engine::SetPixelTexture(SDL_Texture* tex, int* y, int* x, Uint32* pixel, int* pitch) {
 	Uint32* pixels;
 	SDL_LockTexture(tex, NULL, (void**)&pixels, pitch);
 	pixels[*y * ((*pitch) / sizeof(unsigned int)) + *x] = *pixel;
 	SDL_UnlockTexture(tex);
 }
 //Faster if you leave this locked, 
-Uint32 Gore::GetPixelTexture(SDL_Texture* tex, int* y, int* x, int* pitch) {
+Uint32 Gore::Engine::GetPixelTexture(SDL_Texture* tex, int* y, int* x, int* pitch) {
 	Uint32* pixels;
 	SDL_LockTexture(tex, NULL, (void**)&pixels, pitch);
 	return pixels[*y * ((*pitch) / sizeof(unsigned int)) + *x];
 	SDL_UnlockTexture(tex);
 }
+
+void Gore::Engine::MassTextureSet(SDL_Texture* tex, int sy, int sx, int endx, int endy, Uint32* pixel, int* pitch) {
+	Uint32* pixels;
+	int pixpitch = (*pitch) / sizeof(unsigned int);
+	SDL_LockTexture(tex, NULL, (void**)&pixels, pitch);
+	for (int h = sy; h <= endy; h++) {
+		for (int w = sx; w <= endx; w++) {
+			pixels[h * pixpitch + w] = *pixel;
+		}
+	}
+	SDL_UnlockTexture(tex);
+}
+void Gore::Engine::MassTextureSet(SDL_Texture* tex, std::vector<Point> points, std::vector<Uint32>colors, int* pitch) {
+	Uint32* pixels;
+	int pixpitch = (*pitch) / sizeof(unsigned int);
+	SDL_LockTexture(tex, NULL, (void**)&pixels, pitch);
+	for (int i = 0; i < points.size(); i++) {
+		pixels[points[i].y * pixpitch + points[i].x] = colors[i];
+	}
+	SDL_UnlockTexture(tex);
+}
+bool Gore::Engine::MassTextureCheck(SDL_Texture* tex, int sy, int sx, int endx, int endy, Uint32* pixel, int* pitch) {
+	Uint32* pixels;
+	int pixpitch = (*pitch) / sizeof(unsigned int);
+	SDL_LockTexture(tex, NULL, (void**)&pixels, pitch);
+	for (int h = sy; h <= endy; h++) {
+		for (int w = sx; w <= endx; w++) {
+			if (pixels[h * pixpitch + w] == *pixel) {
+				SDL_UnlockTexture(tex);
+				return false;
+			}
+		}
+	}
+	SDL_UnlockTexture(tex);
+	return true;
+}
+bool Gore::Engine::MassTextureCheck(SDL_Texture* tex, std::vector<Point> points, Uint32* pixel, int* pitch) {
+	Uint32* pixels;
+	int pixpitch = (*pitch) / sizeof(unsigned int);
+	SDL_LockTexture(tex, NULL, (void**)&pixels, pitch);
+	for (auto& i : points) {
+		if (pixels[i.y * pixpitch + i.x] == *pixel) {
+			SDL_UnlockTexture(tex);
+			return false;
+		}
+	}
+	SDL_UnlockTexture(tex);
+	return true;
+}
+
 //Decodes everything to a 32bit pixel format, but can convert your format to any type
-SDL_Surface* Gore::loadPNG(std::string name, SDL_PixelFormatEnum format, int w, int h) {
+SDL_Surface* Gore::Engine::loadPNG(std::string name, SDL_PixelFormatEnum format, int w, int h) {
 	unsigned int wr = w;
 	unsigned int hr = h;
 	unsigned char* data;
@@ -127,7 +225,7 @@ SDL_Surface* Gore::loadPNG(std::string name, SDL_PixelFormatEnum format, int w, 
 	return ret;
 }
 //Setpixel won't work without formats without 32bits of color data to use, you can just edit the setpixel yourself if you want to workout outside of RGBA8888
-SDL_Surface* Gore::LoadBMP(const char* file, SDL_PixelFormatEnum format) {
+SDL_Surface* Gore::Engine::LoadBMP(const char* file, SDL_PixelFormatEnum format) {
 	SDL_Surface* temp = SDL_LoadBMP(file);
 	SDL_Surface* remove = SDL_ConvertSurfaceFormat(temp, format, 0);
 	SDL_FreeSurface(temp);
@@ -135,7 +233,7 @@ SDL_Surface* Gore::LoadBMP(const char* file, SDL_PixelFormatEnum format) {
 }
 
 //Loads textures into memory as a linked list. Keep width/heights even with names or you'll get an error
-texp& Gore::loadTextureList(std::vector<std::string> names, std::vector<unsigned int> widths, std::vector<unsigned int> heights, SDL_PixelFormatEnum format, SDL_Renderer* rend, std::string filepath) {
+Gore::texp& Gore::Engine::loadTextureList(std::vector<std::string> names, std::vector<unsigned int> widths, std::vector<unsigned int> heights, SDL_PixelFormatEnum format, SDL_Renderer* rend, std::string filepath) {
 	texp head = NULL;
 	int j = 0;
 	for (auto& i : names) {
@@ -151,7 +249,7 @@ texp& Gore::loadTextureList(std::vector<std::string> names, std::vector<unsigned
 	}
 	return head;
 }
-spxp& Gore::loadSpriteList(std::vector<std::string> names, std::vector<unsigned int> widths, std::vector<unsigned int> heights, SDL_PixelFormatEnum format, std::string filepath) {
+Gore::spxp& Gore::Engine::loadSpriteList(std::vector<std::string> names, std::vector<unsigned int> widths, std::vector<unsigned int> heights, SDL_PixelFormatEnum format, std::string filepath) {
 	spxp head = NULL;
 	int j = 0;
 	for (auto& i : names) {
@@ -169,7 +267,7 @@ spxp& Gore::loadSpriteList(std::vector<std::string> names, std::vector<unsigned 
 
 //Text functions
 //Input starting integer number for character then will loop through till it hits end of input whole time adding to out
-void Gore::mapTextTextures(int start, texp& out, texp& input) {
+void Gore::Engine::mapTextTextures(int start, texp& out, texp& input) {
 	texp t = input;
 	while (t != NULL) {
 		std::string temp;
@@ -181,7 +279,7 @@ void Gore::mapTextTextures(int start, texp& out, texp& input) {
 }
 
 //Width and height for individual letters
-void Gore::drawText(SDL_Renderer* rend, texp& texthead, std::string text, int x, int y, int w, int h) {
+void Gore::Engine::drawText(SDL_Renderer* rend, texp& texthead, std::string text, int x, int y, int w, int h) {
 	int sx = x;
 	int sy = y;
 	for (auto& i : text) {
@@ -203,7 +301,7 @@ void Gore::drawText(SDL_Renderer* rend, texp& texthead, std::string text, int x,
 
 
 //Misc
-double Gore::getDelta() {
+double Gore::DeltaTimer::getDelta() {
 	double delta = 0;
 	LAST = NOW;
 	NOW = SDL_GetPerformanceCounter();
@@ -211,7 +309,7 @@ double Gore::getDelta() {
 	delta = delta * 0.001;
 	return delta;
 }
-Point Gore::raycast2DPixel(SDL_Surface* surf, int sx, int sy, float angle, int step) {
+Gore::Point Gore::Engine::raycast2DPixel(SDL_Surface* surf, int sx, int sy, float angle, int step) {
 	//get the trajectory to step for each axis
 	float stepx = cosf(angle * M_PI / 180);
 	float stepy = sinf(angle * M_PI / 180);
@@ -233,7 +331,7 @@ Point Gore::raycast2DPixel(SDL_Surface* surf, int sx, int sy, float angle, int s
 }
 
 
-SDL_Surface* Gore::createCircle(int w, int h, SDL_Color startcolor) {
+SDL_Surface* Gore::Engine::createCircle(int w, int h, SDL_Color startcolor) {
 	SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA8888);
 
 	int x = ((w >> 1) - 1);
@@ -272,7 +370,7 @@ SDL_Surface* Gore::createCircle(int w, int h, SDL_Color startcolor) {
 	}
 	return surf;
 }
-SDL_Surface* Gore::fillCircle(int w, int h, SDL_Color startcolor) {
+SDL_Surface* Gore::Engine::fillCircle(int w, int h, SDL_Color startcolor) {
 	int radius = (w >> 1);
 	SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA8888);
 	Uint32 curcol = ConvertColorToUint32RGB(startcolor, surf->format);
@@ -289,7 +387,7 @@ SDL_Surface* Gore::fillCircle(int w, int h, SDL_Color startcolor) {
 	}
 	return surf;
 }
-SDL_Surface* Gore::createBloom(int w, int h, SDL_Color startcolor, float magnitude) {
+SDL_Surface* Gore::Engine::createBloom(int w, int h, SDL_Color startcolor, float magnitude) {
 	int radius = (w >> 1);
 	SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_RGBA8888);
 	SDL_SetSurfaceBlendMode(surf, SDL_BLENDMODE_ADD);
@@ -315,8 +413,6 @@ SDL_Surface* Gore::createBloom(int w, int h, SDL_Color startcolor, float magnitu
 			}
 			float distfromside = sqrtf(xp + yp);
 			if (distance - radius < 1) {
-				//SDL_Color col = { startcolor.r, startcolor.g, startcolor.b, distance };
-				//SetPixelSurfaceColorRGBA(surf, &y, &x, &col);
 				curcol = ConvertColorToUint32RGBA({ startcolor.r, startcolor.g, startcolor.b, (Uint8)(distfromside * magnitude) }, surf->format);
 				SetPixelSurface(surf, &y, &x, &curcol);
 			}
@@ -328,7 +424,7 @@ SDL_Surface* Gore::createBloom(int w, int h, SDL_Color startcolor, float magnitu
 
 //Memory related
 //This should work fine even if your computer pads structs, but also might not I have no way to test
-char* Gore::serilizeStruct(char* ptr, int size) {
+char* Gore::Engine::serilizeStruct(char* ptr, int size) {
 	char* mt = (char*)std::malloc(size);
 	for (int i = 0; i < size; i++) {
 		mt[i] = *ptr;
@@ -336,17 +432,7 @@ char* Gore::serilizeStruct(char* ptr, int size) {
 	}
 	return mt;
 }
-//overload 1, used for char arrays, so no use of malloc, make sure output array is big enough to hold size
-void Gore::serilizeStruct(char *ptr, char output[], int size) {
-	//char* mt = (char*)std::malloc(size);
-	for (int i = 0; i < size; i++) {
-		output[i] = *ptr;
-		ptr++;
-	}
-}
-
-//
-void Gore::deserilizeStruct(char* dest, char* data, int size) {
+void Gore::Engine::deserilizeStruct(char* dest, char* data, int size) {
 	for (int i = 0; i < size; i++) {
 		*dest = data[i];
 		dest++;
@@ -355,7 +441,7 @@ void Gore::deserilizeStruct(char* dest, char* data, int size) {
 //point system
 //Memory footprint high, if I pack data into bits instead of bytes will reduce greatly
 //Really useful for an animation system
-bool* Gore::createPoints(SDL_Surface* surf) {
+bool* Gore::Engine::createPoints(SDL_Surface* surf) {
 	bool* pt = (bool*)std::malloc((surf->w * surf->h));
 	for (int i = 0; i < surf->h; i++) {
 		for (int j = 0; j < surf->w; j++) {
@@ -372,7 +458,7 @@ bool* Gore::createPoints(SDL_Surface* surf) {
 	return pt;
 }
 //Need to improve finding of differences between frames; ignores some differences for some reason
-TrList Gore::generatePixelTransforms(spxp& spritelist) {
+Gore::TrList Gore::Engine::generatePixelTransforms(spxp& spritelist) {
 	TrList list = NULL;
 	spxp ptr = spritelist;
 	spxp bef = NULL;
@@ -431,7 +517,7 @@ TrList Gore::generatePixelTransforms(spxp& spritelist) {
 	}
 	return list;
 }
-void Gore::switchTranformFrames(SDL_Surface* surf, TrList& frames, TrList& begin) {
+void Gore::Engine::switchTranformFrames(SDL_Surface* surf, TrList& frames, TrList& begin) {
 	//go through each frames data and change the surface
 		for (int i = 0; i < frames->size; i += 12) {
 			Uint32* p = (Uint32*)&frames->data[i];
@@ -448,7 +534,7 @@ void Gore::switchTranformFrames(SDL_Surface* surf, TrList& frames, TrList& begin
 			frames = begin;
 		}
 }
-SDL_Surface* Gore::initTransformSurf(spxp& head) {
+SDL_Surface* Gore::Engine::Engine::initTransformSurf(spxp& head) {
 	SDL_Surface* surf = SDL_CreateRGBSurfaceWithFormat(0, head->current->w, head->current->h, 32, SDL_PIXELFORMAT_RGBA8888);
 	clearSurface(surf);
 	for (int i = 0; i < surf->h; i++) {
@@ -462,12 +548,12 @@ SDL_Surface* Gore::initTransformSurf(spxp& head) {
 
 //misc
 //Takes in degrees returns radians
-float Gore::trajX(float deg) {
+float Gore::Engine::trajX(float deg) {
 	deg = cos(deg * M_PI / 180);
 	return deg;
 }
 //Takes in degrees return radians
-float Gore::trajY(float deg) {
+float Gore::Engine::trajY(float deg) {
 	deg = sin(deg * M_PI / 180);
 	return deg;
 }
