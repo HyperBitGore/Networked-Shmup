@@ -2,7 +2,6 @@
 #undef main
 
 
-//need to add basic bullet functionality, so creation of a bullet and then the server will keep track of and send the data to the user
 //add bullet collision on the server side, so players can die
 //add client side prediction
 
@@ -52,37 +51,30 @@ int main() {
 		}
 		double delta = dt.getDelta();
 		shootcool += delta;
-		bool sendLoc = false;
 		SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
 		SDL_RenderClear(rend);
 		if (keys[SDL_SCANCODE_W]) {
 			player.y -= 150 * delta;
-			sendLoc = true;
 		}else if (keys[SDL_SCANCODE_S]) {
 			player.y += 150 * delta;
-			sendLoc = true;
 		}
 		if (keys[SDL_SCANCODE_A]) {
 			player.x -= 150 * delta;
-			sendLoc = true;
 		}else if (keys[SDL_SCANCODE_D]) {
 			player.x += 150 * delta;
-			sendLoc = true;
 		}
-		if (sendLoc) {
-			ZeroMemory(buf, 128);
-			buf[0] = PPOSITION;
-			char* tt = buf;
-			tt++;
-			float* tpo = (float*)tt;
-			*tpo = player.x;
-			tpo++;
-			*tpo = player.y;
-			tpo++;
-			int* idn = (int*)tpo;
-			*idn = player.ID;
-			sendto(udpSock, buf, 128, 0, (sockaddr*)&server, sizeof(server));
-		}
+		ZeroMemory(buf, 128);
+		buf[0] = PPOSITION;
+		char* tt = buf;
+		tt++;
+		float* tpo = (float*)tt;
+		*tpo = player.x;
+		tpo++;
+		*tpo = player.y;
+		tpo++;
+		int* idn = (int*)tpo;
+		*idn = player.ID;
+		sendto(udpSock, buf, 128, 0, (sockaddr*)&server, sizeof(server));
 		int mx, my;
 		if (SDL_GetMouseState(&mx, &my) & SDL_BUTTON(SDL_BUTTON_LEFT) && shootcool > 0.005) {
 			//send bullet creation data to server
@@ -97,9 +89,9 @@ int main() {
 			//calculate trajectory now
 			float dx, dy;
 			calcSlope(player.x, player.y, mx, my, &dx, &dy);
-			*t = dx;
+			*t = -dx;
 			t++;
-			*t = dy;
+			*t = -dy;
 			t++;
 			int* top = (int*)t;
 			*top = player.ID;
@@ -112,11 +104,24 @@ int main() {
 			SDL_Rect rect = { players[i].x, players[i].y, players[i].w, players[i].h };
 			SDL_RenderFillRect(rend, &rect);
 		}
-		for (int i = 0; i < bullets.size(); i++) {
-
+		bt1.lock();
+		for (int i = 0; i < bullets.size();) {
+			bullets[i].mvtime += delta;
+			if (bullets[i].mvtime > 0.01) {
+				bullets[i].x += bullets[i].trajx;
+				bullets[i].y += bullets[i].trajy;
+				bullets[i].mvtime = 0;
+			}
 			SDL_Rect rect = { bullets[i].x, bullets[i].y, bullets[i].w, bullets[i].h };
 			SDL_RenderFillRect(rend, &rect);
+			if (bullets[i].er) {
+				bullets.erase(bullets.begin() + i);
+			}
+			else {
+				i++;
+			}
 		}
+		bt1.unlock();
 		SDL_SetRenderDrawColor(rend, 50, 255, 100, 255);
 		SDL_Rect prect = { player.x, player.y, player.w, player.h };
 		SDL_RenderFillRect(rend, &prect);

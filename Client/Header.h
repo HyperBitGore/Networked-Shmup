@@ -3,6 +3,7 @@
 #include <iostream>
 #include <WS2tcpip.h>
 #include <thread>
+#include <mutex>
 #include <string>
 #include <vector>
 #include <time.h>
@@ -20,18 +21,37 @@ struct Entity {
 	int w;
 	int h;
 	int ID;
+	bool er;
 };
 
 struct Bullet : Entity{
 	float trajx;
 	float trajy;
+	float mvtime;
+};
+class Timer {
+private:
+	std::chrono::time_point<std::chrono::steady_clock> start;
+	std::chrono::time_point<std::chrono::steady_clock> end;
+public:
+	void startTime() {
+		start = std::chrono::steady_clock::now();
+	}
+	double getTime() {
+		end = std::chrono::steady_clock::now();
+		return std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+	}
+	void resetTime() {
+		start = std::chrono::steady_clock::now();
+		end = std::chrono::steady_clock::now();
+	}
 };
 
-
-enum {PPOSITION = 28, BPOSITION, DISCONNECT, CONNECT, NEWBULLET};
+enum {PPOSITION = 28, BPOSITION, DISCONNECT, CONNECT, NEWBULLET, RMVBULLET};
 
 Gore::FreeList<Entity> players;
 std::vector<Bullet> bullets;
+std::mutex bt1;
 
 void connectToServer(SOCKET* udpSock, SOCKET* tcpSock, sockaddr_in *server, Entity* player) {
 	std::string serverip;
@@ -126,6 +146,7 @@ void udpRcv(SOCKET udpSock, sockaddr_in server, int pid) {
 				p.ID = tid;
 				p.w = 25;
 				p.h = 25;
+				p.er = false;
 				players.insert(p);
 			}
 			break;
@@ -133,6 +154,7 @@ void udpRcv(SOCKET udpSock, sockaddr_in server, int pid) {
 			tt = buf;
 			tt++;
 			ind = (int*)tt;
+			bt1.lock();
 			for (int i = 0; i < bullets.size(); i++) {
 				if (*ind == bullets[i].ID) {
 					ind++;
@@ -144,7 +166,7 @@ void udpRcv(SOCKET udpSock, sockaddr_in server, int pid) {
 					break;
 				}
 			}
-
+			bt1.unlock();
 			break;
 		}
 	}
@@ -181,7 +203,22 @@ void tcpRcv(SOCKET tcpSock) {
 				b.ID = *tp;
 				b.w = 5;
 				b.h = 5;
+				b.mvtime = 0;
+				b.er = false;
 				bullets.push_back(b);
+				break;
+			case RMVBULLET:
+				tt = buf;
+				tt++;
+				tp = (int*)tt;
+				bt1.lock();
+				for (int i = 0; i < bullets.size(); i++) {
+					if (bullets[i].ID == *tp) {
+						bullets[i].er = true;
+						break;
+					}
+				}
+				bt1.unlock();
 				break;
 			}
 		}

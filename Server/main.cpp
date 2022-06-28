@@ -1,6 +1,7 @@
 #include <iostream>
 #include <WS2tcpip.h>
 #include <thread>
+#include <mutex>
 #include <vector>
 #include <time.h>
 #include <algorithm>
@@ -11,6 +12,7 @@ struct Entity {
 	float x;
 	float y;
 	int ID;
+	int health;
 	sockaddr_in addr;
 };
 struct Bullet {
@@ -41,11 +43,17 @@ public:
 std::vector<sockaddr_in> addresses;
 std::vector<Entity> players;
 std::vector<Bullet> bullets;
+std::mutex mt1;
+fd_set master;
 
-enum { PPOSITION = 28, BPOSITION, DISCONNECT, CONNECT, NEWBULLET};
+enum { PPOSITION = 28, BPOSITION, DISCONNECT, CONNECT, NEWBULLET, RMVBULLET};
+
+bool isColliding(Bullet b, Entity p) {
+	return (b.x < p.x + 25 && b.x + 5 > p.x && b.y < p.y + 25 && b.y + 5 > p.y);
+}
+
 
 void tcpThread() {
-	fd_set master;
 	FD_ZERO(&master);
 	SOCKET listener = socket(AF_INET, SOCK_STREAM, 0);
 	if (listener == INVALID_SOCKET) {
@@ -62,7 +70,9 @@ void tcpThread() {
 	FD_SET(listener, &master);
 	char buf[128];
 	while (true) {
+		mt1.lock();
 		fd_set copy = master;
+		mt1.unlock();
 		int sockCount = select(0, &copy, nullptr, nullptr, nullptr);
 		for (int i = 0; i < sockCount; i++) {
 			ZeroMemory(buf, 128);
@@ -103,11 +113,13 @@ void tcpThread() {
 				*ttp = players.size();
 				p.ID = *ttp;
 				p.addr.sin_port = 0;
+				p.health = 100;
 				players.push_back(p);
 				std::cout << players.size() << std::endl;
 				send(clientSocket, buf, 128, 0);
-
+				mt1.lock();
 				FD_SET(clientSocket, &master);
+				mt1.unlock();
 			}
 			else {
 				//recv data from socket
@@ -138,9 +150,11 @@ void tcpThread() {
 					tp = (int*)tt;
 					tp += 5;
 					*tp = b.ID;
+					mt1.lock();
 					for (int j = 0; j < master.fd_count; j++) {
 						send(master.fd_array[j], buf, 128, 0);
 					}
+					mt1.unlock();
 					break;
 				}
 
@@ -178,74 +192,111 @@ int main() {
 	char buf[128];
 	//break off seperate thread for tcp listening
 	std::thread tcpT(tcpThread);
+	fd_set udpm;
+	FD_ZERO(&udpm);
+	FD_SET(in, &udpm);
 	while (!exitf) {
 		ZeroMemory(buf, 128);
+		fd_set copy = udpm;
 		bool push = true;
-		int bytesIn = recvfrom(in, buf, 128, 0, (sockaddr*)&client, &clientLen);
-		if (bytesIn == SOCKET_ERROR) {
-			std::cout << "Error recv from client " << WSAGetLastError() << std::endl;
-		}
-		else {
-			//read data sent and then send back out
-			char clientIp[256];
-			ZeroMemory(clientIp, 256);
-			inet_ntop(AF_INET, &client.sin_addr, clientIp, 256);
-			switch (buf[0]) {
-			case PPOSITION:
-				for (auto& i : addresses) {
-					sendto(in, buf, 128, 0, (sockaddr*)&i, sizeof(i));
-				}
-				break;
-			case CONNECT:
-				//if this gets dropped client is screwed
-				for (auto& i : addresses) {
-					if (client.sin_addr.S_un.S_addr == i.sin_addr.S_un.S_addr && client.sin_port == i.sin_port) {
-						push = false;
+		int socs = select(0, &copy, nullptr, nullptr, nullptr);
+		if (socs >= 1) {
+			int bytesIn = recvfrom(copy.fd_array[0], buf, 128, 0, (sockaddr*)&client, &clientLen);
+			if (bytesIn == SOCKET_ERROR) {
+				std::cout << "Error recv from client " << WSAGetLastError() << std::endl;
+			}
+			else {
+				//read data sent and then send back out
+				char clientIp[256];
+				ZeroMemory(clientIp, 256);
+				inet_ntop(AF_INET, &client.sin_addr, clientIp, 256);
+				switch (buf[0]) {
+				case PPOSITION:
+					for (auto& i : addresses) {
+						sendto(in, buf, 128, 0, (sockaddr*)&i, sizeof(i));
 					}
-				}
-				if (push) {
-					char* tol;
-					float* t;
-					int* pt;
-					addresses.push_back(client);
-					//set players addr to current one based on the id we recieve from that address
-					tol = buf;
-					tol++;
-					t = (float*)tol;
-					t++;
-					t++;
-					pt = (int*)t;
-					for (auto& i : players) {
-						if (i.ID == *pt) {
-							i.addr = client;
+					break;
+				case CONNECT:
+					//if this gets dropped client is screwed
+					for (auto& i : addresses) {
+						if (client.sin_addr.S_un.S_addr == i.sin_addr.S_un.S_addr && client.sin_port == i.sin_port) {
+							push = false;
 						}
 					}
-					std::cout << "New address added\n";
-				}
-				break;
-			case DISCONNECT:
+					if (push) {
+						char* tol;
+						float* t;
+						int* pt;
+						addresses.push_back(client);
+						//set players addr to current one based on the id we recieve from that address
+						tol = buf;
+						tol++;
+						t = (float*)tol;
+						t++;
+						t++;
+						pt = (int*)t;
+						for (auto& i : players) {
+							if (i.ID == *pt) {
+								i.addr = client;
+							}
+						}
+						std::cout << "New address added\n";
+					}
+					break;
+				case DISCONNECT:
 
-				break;
+					break;
+				}
 			}
 		}
 		//bullet updates
-		if (btime.getTime() > 25) {
-			for (int i = 0; i < bullets.size(); i++) {
+		if (btime.getTime() > 5) {
+			for (int i = 0; i < bullets.size();) {
+				bullets[i].x += bullets[i].trajx;
+				bullets[i].y += bullets[i].trajy;
+				bool er = false;
 				ZeroMemory(buf, 128);
-				char* tt = buf;
-				buf[0] = BPOSITION;
-				tt++;
-				int* tp = (int*)tt;
-				*tp = bullets[i].ID;
-				tp++;
-				float* t = (float*)tp;
-				*t = bullets[i].x;
-				t++;
-				*t = bullets[i].y;
-				t++;
-				*t = bullets[i].trajx;
-				t++;
-				*t = bullets[i].trajy;
+				for (int j = 0; j < players.size(); j++) {
+					if (isColliding(bullets[i], players[j])) {
+						players[j].health -= 5;
+						//send pack to damage player
+						er = true;
+						j = players.size();
+					}
+				}
+				if (bullets[i].x < 0 || bullets[i].y < 0) {
+					er = true;
+				}
+				if (er) {
+					char* tt = buf;
+					buf[0] = RMVBULLET;
+					tt++;
+					int* tp = (int*)tt;
+					*tp = bullets[i].ID;
+					mt1.lock();
+					for (int j = 0; j < master.fd_count; j++) {
+						send(master.fd_array[j], buf, 128, 0);
+					}
+					mt1.unlock();
+					bullets.erase(bullets.begin() + i);
+				}
+				else {
+					char* tt = buf;
+					buf[0] = BPOSITION;
+					tt++;
+					int* tp = (int*)tt;
+					*tp = bullets[i].ID;
+					tp++;
+					float* t = (float*)tp;
+					*t = bullets[i].x;
+					t++;
+					*t = bullets[i].y;
+					t++;
+					*t = bullets[i].trajx;
+					t++;
+					*t = bullets[i].trajy;
+					i++;
+				}
 				for (auto& i : addresses) {
 					sendto(in, buf, 128, 0, (sockaddr*)&i, sizeof(i));
 				}
