@@ -110,6 +110,11 @@ void udpRcv(SOCKET udpSock, sockaddr_in server, int pid) {
 	while (true) {
 		ZeroMemory(buf, 128);
 		int bytesIn = recvfrom(udpSock, buf, 128, 0, (sockaddr*)&server, &serverSize);
+		if(bytesIn <= 0){
+			std::cout << "exiting udp thread\n";
+			closesocket(udpSock);
+			return;
+		}
 		char* tt;
 		float* tpo;
 		int* ind;
@@ -163,7 +168,7 @@ void udpRcv(SOCKET udpSock, sockaddr_in server, int pid) {
 					tpo++;
 					bullets[i].y = *tpo;
 					tpo++;
-					break;
+					i = bullets.size();
 				}
 			}
 			bt1.unlock();
@@ -181,7 +186,12 @@ void tcpRcv(SOCKET tcpSock) {
 		int socksTo = select(0, &copy, nullptr, nullptr, nullptr);
 		if (socksTo >= 1) {
 			ZeroMemory(buf, 128);
-			recv(copy.fd_array[0], buf, 128, 0);
+			int btsin = recv(copy.fd_array[0], buf, 128, 0);
+			if (btsin <= 0) {
+				std::cout << "Exiting tcp thread\n";
+				closesocket(copy.fd_array[0]);
+				return;
+			}
 			char* tt;
 			float* t;
 			int* tp;
@@ -215,7 +225,7 @@ void tcpRcv(SOCKET tcpSock) {
 				for (int i = 0; i < bullets.size(); i++) {
 					if (bullets[i].ID == *tp) {
 						bullets[i].er = true;
-						break;
+						i = bullets.size();
 					}
 				}
 				bt1.unlock();

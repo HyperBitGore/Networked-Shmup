@@ -156,6 +156,21 @@ void tcpThread() {
 					}
 					mt1.unlock();
 					break;
+				case DISCONNECT:
+					mt1.lock();
+					tt = buf;
+					tt++;
+					tp = (int*)tt;
+					for (int kl = 0; kl < addresses.size(); kl++) {
+						if (addresses[kl].sin_addr.S_un.S_addr == players[*tp].addr.sin_addr.S_un.S_addr && addresses[kl].sin_port == players[*tp].addr.sin_port) {
+							addresses.erase(addresses.begin() + kl);
+							std::cout << "Erase success\n";
+						}
+					}
+					std::cout << "DC'd player ID: " << *tp << "\n";
+					players.erase(players.begin() + *tp);
+					mt1.unlock();
+					break;
 				}
 
 			}
@@ -202,6 +217,7 @@ int main() {
 		int socs = select(0, &copy, nullptr, nullptr, nullptr);
 		if (socs >= 1) {
 			int bytesIn = recvfrom(copy.fd_array[0], buf, 128, 0, (sockaddr*)&client, &clientLen);
+			mt1.lock();
 			if (bytesIn == SOCKET_ERROR) {
 				std::cout << "Error recv from client " << WSAGetLastError() << std::endl;
 			}
@@ -243,11 +259,9 @@ int main() {
 						std::cout << "New address added\n";
 					}
 					break;
-				case DISCONNECT:
-
-					break;
 				}
 			}
+			mt1.unlock();
 		}
 		//bullet updates
 		if (btime.getTime() > 5) {
@@ -297,9 +311,11 @@ int main() {
 					*t = bullets[i].trajy;
 					i++;
 				}
+				mt1.lock();
 				for (auto& i : addresses) {
 					sendto(in, buf, 128, 0, (sockaddr*)&i, sizeof(i));
 				}
+				mt1.unlock();
 			}
 			btime.resetTime();
 		}

@@ -34,7 +34,7 @@ int main() {
 	keys = SDL_GetKeyboardState(NULL);
 	Gore::DeltaTimer dt;
 
-
+	SDL_Rect camera = { 0, 0, 800, 800 };
 	
 	std::thread udpRcvThread(udpRcv, udpSock, server, player.ID);
 	std::thread tcpRcvThread(tcpRcv, tcpSock);
@@ -49,18 +49,28 @@ int main() {
 				break;
 			}
 		}
+		camera.x = player.x - 400;
+		camera.y = player.y - 400;
 		double delta = dt.getDelta();
 		shootcool += delta;
 		SDL_SetRenderDrawColor(rend, 0, 0, 0, 255);
 		SDL_RenderClear(rend);
 		if (keys[SDL_SCANCODE_W]) {
 			player.y -= 150 * delta;
-		}else if (keys[SDL_SCANCODE_S]) {
+			if (player.y < 0) {
+				player.y += 150 * delta;
+			}
+		}
+		else if (keys[SDL_SCANCODE_S]) {
 			player.y += 150 * delta;
 		}
 		if (keys[SDL_SCANCODE_A]) {
 			player.x -= 150 * delta;
-		}else if (keys[SDL_SCANCODE_D]) {
+			if (player.x < 0) {
+				player.x += 150 * delta;
+			}
+		}
+		else if (keys[SDL_SCANCODE_D]) {
 			player.x += 150 * delta;
 		}
 		ZeroMemory(buf, 128);
@@ -88,7 +98,7 @@ int main() {
 			t++;
 			//calculate trajectory now
 			float dx, dy;
-			calcSlope(player.x, player.y, mx, my, &dx, &dy);
+			calcSlope(player.x, player.y, mx + camera.x, my + camera.y, &dx, &dy);
 			*t = -dx;
 			t++;
 			*t = -dy;
@@ -101,7 +111,7 @@ int main() {
 
 		SDL_SetRenderDrawColor(rend, 255, 25, 50, 255);
 		for (int i = 0; i < players.size(); i++) {
-			SDL_Rect rect = { players[i].x, players[i].y, players[i].w, players[i].h };
+			SDL_Rect rect = { players[i].x - camera.x, players[i].y - camera.y, players[i].w, players[i].h };
 			SDL_RenderFillRect(rend, &rect);
 		}
 		bt1.lock();
@@ -112,7 +122,7 @@ int main() {
 				bullets[i].y += bullets[i].trajy;
 				bullets[i].mvtime = 0;
 			}
-			SDL_Rect rect = { bullets[i].x, bullets[i].y, bullets[i].w, bullets[i].h };
+			SDL_Rect rect = { bullets[i].x - camera.x, bullets[i].y - camera.y, bullets[i].w, bullets[i].h };
 			SDL_RenderFillRect(rend, &rect);
 			if (bullets[i].er) {
 				bullets.erase(bullets.begin() + i);
@@ -123,12 +133,20 @@ int main() {
 		}
 		bt1.unlock();
 		SDL_SetRenderDrawColor(rend, 50, 255, 100, 255);
-		SDL_Rect prect = { player.x, player.y, player.w, player.h };
+		SDL_Rect prect = { player.x - camera.x, player.y - camera.y, player.w, player.h };
 		SDL_RenderFillRect(rend, &prect);
 
 
 		SDL_RenderPresent(rend);
 	}
+	//send disconnect
+	ZeroMemory(buf, 128);
+	buf[0] = DISCONNECT;
+	char* tt = buf;
+	tt++;
+	int* tpot = (int*)tt;
+	*tpot = player.ID;
+	send(tcpSock, buf, 128, 0);
 	//close sockets
 	closesocket(udpSock);
 	closesocket(tcpSock);
