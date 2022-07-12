@@ -22,6 +22,7 @@ struct Entity {
 	int h;
 	int ID;
 	bool er;
+	int health;
 };
 
 struct Bullet : Entity{
@@ -47,11 +48,19 @@ public:
 	}
 };
 
-enum {PPOSITION = 28, BPOSITION, DISCONNECT, CONNECT, NEWBULLET, RMVBULLET};
+enum {PPOSITION = 28, BPOSITION, DISCONNECT, CONNECT, NEWBULLET, RMVBULLET, HEALTH, DEATH, SCORE};
 
 Gore::FreeList<Entity> players;
 std::vector<Bullet> bullets;
 std::mutex bt1;
+Entity player = { 400, 400, 25, 25, 0, 100 };
+bool isColliding(Entity b, Entity e) {
+	if (b.x < e.x + e.w && b.x + b.w > e.x && b.y < e.y + e.h && b.y + b.h > e.y) {
+		return true;
+	}
+	return false;
+}
+
 
 void connectToServer(SOCKET* udpSock, SOCKET* tcpSock, sockaddr_in *server, Entity* player) {
 	std::string serverip;
@@ -87,6 +96,7 @@ void connectToServer(SOCKET* udpSock, SOCKET* tcpSock, sockaddr_in *server, Enti
 	t++;
 	int* tt = (int*)t;
 	player->ID = *tt;
+	std::cout << "Your ID is " << player->ID << "\n";
 	player->w = 25;
 	player->h = 25;
 	ZeroMemory(buf, 128);
@@ -100,7 +110,9 @@ void connectToServer(SOCKET* udpSock, SOCKET* tcpSock, sockaddr_in *server, Enti
 	t++;
 	tt = (int*)t;
 	*tt = player->ID;
+	player->health = 100;
 	sendto(*udpSock, buf, 128, 0, (sockaddr*)server, sizeof(*server));
+	//wait for udp server socket to send return connect packet
 }
 
 //only recieve data in udp
@@ -124,7 +136,7 @@ void udpRcv(SOCKET udpSock, sockaddr_in server, int pid) {
 		//bool makenew = true;
 		switch (buf[0]) {
 		case PPOSITION:
-			std::cout << "recv player position\n";
+			//std::cout << "recv player position\n";
 			//reading the x, y, and index from packet
 			tt = buf;
 			tt++;
@@ -136,6 +148,7 @@ void udpRcv(SOCKET udpSock, sockaddr_in server, int pid) {
 			ind = (int*)tpo;
 			tid = *ind;
 			push = true;
+			bt1.lock();
 			for (int i = 0; i < players.size(); i++) {
 				if (players[i].ID == tid) {
 					players[i].x = tx;
@@ -154,6 +167,7 @@ void udpRcv(SOCKET udpSock, sockaddr_in server, int pid) {
 				p.er = false;
 				players.insert(p);
 			}
+			bt1.unlock();
 			break;
 		case BPOSITION:
 			tt = buf;
@@ -172,6 +186,12 @@ void udpRcv(SOCKET udpSock, sockaddr_in server, int pid) {
 				}
 			}
 			bt1.unlock();
+			break;
+		case HEALTH:
+			tt = buf;
+			tt++;
+			ind = (int*)tt;
+			player.health = *ind;
 			break;
 		}
 	}
@@ -195,6 +215,8 @@ void tcpRcv(SOCKET tcpSock) {
 			char* tt;
 			float* t;
 			int* tp;
+			int temp = 0;
+			float psx = 0, psy = 0;
 			Bullet b;
 			switch (buf[0]) {
 			case NEWBULLET:
@@ -224,8 +246,47 @@ void tcpRcv(SOCKET tcpSock) {
 				bt1.lock();
 				for (int i = 0; i < bullets.size(); i++) {
 					if (bullets[i].ID == *tp) {
-						bullets[i].er = true;
-						i = bullets.size();
+						bullets.erase(bullets.begin() + i);
+						break;
+					}
+				}
+				bt1.unlock();
+				break;
+			case DEATH:
+				bt1.lock();
+				tt = buf;
+				tt++;
+				tp = (int*)tt;
+				temp = *tp;
+				tp++;
+				t = (float*)tp;
+				psx = *t;
+				t++;
+				psy = *t;
+				for (int i = 0; i < players.size(); i++) {
+					if (players[i].ID == temp) {
+						if (players[i].ID == player.ID) {
+							player.x = psx;
+							player.y = psy;
+							player.health = 100;
+						}
+						players[i].x = psx;
+						players[i].y = psy;
+						break;
+					}
+				}
+				bt1.unlock();
+				break;
+			case SCORE:
+				tt = buf;
+				tt++;
+				tp = (int*)tt;
+				bt1.lock();
+				for (int i = 0; i < players.size(); i++) {
+					if (players[i].ID == *tp) {
+						tp++;
+						std::cout << players[i].ID << " scored! New score is " << *tp << "\n";
+						break;
 					}
 				}
 				bt1.unlock();

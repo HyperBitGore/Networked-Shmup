@@ -2,8 +2,51 @@
 #undef main
 
 
-//add bullet collision on the server side, so players can die
-//add client side prediction
+//maybe change connection to not use UDP for finding players
+
+
+void generateWalls(std::vector<Entity>& output) {
+	std::vector<int> walls = {
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+	float sx = 0.0f;
+	float sy = 0.0f;
+	for (int i = 0; i < walls.size();) {
+		for (int j = 0; j < 30 && i < walls.size(); j++) {
+			if (walls[i] == 1) {
+				Entity w;
+				w.x = sx;
+				w.y = sy;
+				w.w = 50;
+				w.h = 50;
+				w.ID = walls.size();
+				w.er = false;
+				output.push_back(w);
+			}
+			sx += 50.0f;
+			i++;
+		}
+		sx = 0.0f;
+		sy += 50.0f;
+	}
+}
+
 
 int main() {
 	//start winsock
@@ -19,7 +62,6 @@ int main() {
 
 	SOCKET tcpSock;
 	
-	Entity player = { 400, 400, 25, 25, 0 };
 	connectToServer(&udpSock, &tcpSock, &server, &player);
 	bool exitf = false;
 	//init SDL
@@ -34,6 +76,8 @@ int main() {
 	keys = SDL_GetKeyboardState(NULL);
 	Gore::DeltaTimer dt;
 
+	std::vector<Entity> walls;
+	generateWalls(walls);
 	SDL_Rect camera = { 0, 0, 800, 800 };
 	
 	std::thread udpRcvThread(udpRcv, udpSock, server, player.ID);
@@ -57,21 +101,39 @@ int main() {
 		SDL_RenderClear(rend);
 		if (keys[SDL_SCANCODE_W]) {
 			player.y -= 150 * delta;
-			if (player.y < 0) {
-				player.y += 150 * delta;
+			for(auto& i : walls){
+				if (isColliding(player, i)) {
+					player.y += 150 * delta;
+					break;
+				}
 			}
 		}
 		else if (keys[SDL_SCANCODE_S]) {
 			player.y += 150 * delta;
+			for (auto& i : walls) {
+				if (isColliding(player, i)) {
+					player.y -= 150 * delta;
+					break;
+				}
+			}
 		}
 		if (keys[SDL_SCANCODE_A]) {
 			player.x -= 150 * delta;
-			if (player.x < 0) {
-				player.x += 150 * delta;
+			for (auto& i : walls) {
+				if (isColliding(player, i)) {
+					player.x += 150 * delta;
+					break;
+				}
 			}
 		}
 		else if (keys[SDL_SCANCODE_D]) {
 			player.x += 150 * delta;
+			for (auto& i : walls) {
+				if (isColliding(player, i)) {
+					player.x -= 150 * delta;
+					break;
+				}
+			}
 		}
 		ZeroMemory(buf, 128);
 		buf[0] = PPOSITION;
@@ -108,14 +170,18 @@ int main() {
 			send(tcpSock, buf, 128, 0);
 			shootcool = 0;
 		}
-
+		SDL_SetRenderDrawColor(rend, 75, 25, 255, 255);
+		for (auto& i : walls) {
+			SDL_Rect rect = { i.x - camera.x, i.y - camera.y, i.w, i.h };
+			SDL_RenderFillRect(rend, &rect);
+		}
 		SDL_SetRenderDrawColor(rend, 255, 25, 50, 255);
+		bt1.lock();
 		for (int i = 0; i < players.size(); i++) {
 			SDL_Rect rect = { players[i].x - camera.x, players[i].y - camera.y, players[i].w, players[i].h };
 			SDL_RenderFillRect(rend, &rect);
 		}
-		bt1.lock();
-		for (int i = 0; i < bullets.size();) {
+		for (int i = 0; i < bullets.size(); i++) {
 			bullets[i].mvtime += delta;
 			if (bullets[i].mvtime > 0.01) {
 				bullets[i].x += bullets[i].trajx;
@@ -124,14 +190,12 @@ int main() {
 			}
 			SDL_Rect rect = { bullets[i].x - camera.x, bullets[i].y - camera.y, bullets[i].w, bullets[i].h };
 			SDL_RenderFillRect(rend, &rect);
-			if (bullets[i].er) {
-				bullets.erase(bullets.begin() + i);
-			}
-			else {
-				i++;
-			}
 		}
 		bt1.unlock();
+		SDL_SetRenderDrawColor(rend, 255, 55, 75, 255);
+		SDL_Rect hrect = { 0, 0, player.health * 3, 35 };
+		SDL_RenderFillRect(rend, &hrect);
+
 		SDL_SetRenderDrawColor(rend, 50, 255, 100, 255);
 		SDL_Rect prect = { player.x - camera.x, player.y - camera.y, player.w, player.h };
 		SDL_RenderFillRect(rend, &prect);

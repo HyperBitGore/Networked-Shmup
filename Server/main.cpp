@@ -14,6 +14,9 @@ struct Entity {
 	int ID;
 	int health;
 	sockaddr_in addr;
+	float sx;
+	float sy;
+	int score;
 };
 struct Bullet {
 	float x;
@@ -46,7 +49,7 @@ std::vector<Bullet> bullets;
 std::mutex mt1;
 fd_set master;
 
-enum { PPOSITION = 28, BPOSITION, DISCONNECT, CONNECT, NEWBULLET, RMVBULLET};
+enum { PPOSITION = 28, BPOSITION, DISCONNECT, CONNECT, NEWBULLET, RMVBULLET, HEALTH, DEATH, SCORE};
 
 bool isColliding(Bullet b, Entity p) {
 	return (b.x < p.x + 25 && b.x + 5 > p.x && b.y < p.y + 25 && b.y + 5 > p.y);
@@ -103,17 +106,20 @@ void tcpThread() {
 				char* t = buf;
 				Entity p;
 				float* tt = (float*)buf;
-				*tt = rand() % 750 + 1;
+				*tt = rand() % 750 + 70;
 				p.x = *tt;
 				tt++;
-				*tt = rand() % 750 + 1;
+				*tt = rand() % 750 + 70;
 				p.y = *tt;
+				p.sx = p.x;
+				p.sy = p.y;
 				tt++;
 				int* ttp = (int*)tt;
 				*ttp = players.size();
 				p.ID = *ttp;
 				p.addr.sin_port = 0;
 				p.health = 100;
+				p.score = 0;
 				players.push_back(p);
 				std::cout << players.size() << std::endl;
 				send(clientSocket, buf, 128, 0);
@@ -172,7 +178,6 @@ void tcpThread() {
 					mt1.unlock();
 					break;
 				}
-
 			}
 		}
 	}
@@ -226,10 +231,26 @@ int main() {
 				char clientIp[256];
 				ZeroMemory(clientIp, 256);
 				inet_ntop(AF_INET, &client.sin_addr, clientIp, 256);
+				float tx, ty;
+				char* cpo;
+				int* ct;
+				float* cc;
 				switch (buf[0]) {
 				case PPOSITION:
-					for (auto& i : addresses) {
-						sendto(in, buf, 128, 0, (sockaddr*)&i, sizeof(i));
+					cpo = buf;
+					cpo++;
+					cc = (float*)cpo;
+					tx = *cc;
+					cc++;
+					ty = *cc;
+					cc++;
+					ct = (int*)cc;
+					for (auto& i : players) {
+						if (i.ID == *ct) {
+							i.x = tx;
+							i.y = ty;
+						}
+						sendto(in, buf, 128, 0, (sockaddr*)&i.addr, sizeof(i.addr));
 					}
 					break;
 				case CONNECT:
@@ -263,6 +284,29 @@ int main() {
 			}
 			mt1.unlock();
 		}
+		//checking for player death
+		mt1.lock();
+		for (int j = 0; j < players.size(); j++) {
+			if (players[j].health <= 0) {
+				ZeroMemory(buf, 128);
+				buf[0] = DEATH;
+				char* tp = buf;
+				tp++;
+				int* t = (int*)tp;
+				*t = players[j].ID;
+				t++;
+				float* tow = (float*)t;
+				*tow = players[j].sx;
+				tow++;
+				*tow = players[j].sy;
+				for (int j = 0; j < master.fd_count; j++) {
+					send(master.fd_array[j], buf, 128, 0);
+				}
+				players[j].health = 100;
+			}
+		}
+		mt1.unlock();
+
 		//bullet updates
 		if (btime.getTime() > 5) {
 			for (int i = 0; i < bullets.size();) {
@@ -270,18 +314,46 @@ int main() {
 				bullets[i].y += bullets[i].trajy;
 				bool er = false;
 				ZeroMemory(buf, 128);
+				mt1.lock();
 				for (int j = 0; j < players.size(); j++) {
-					if (isColliding(bullets[i], players[j])) {
+					if (isColliding(bullets[i], players[j]) && players[j].ID != bullets[i].PID) {
 						players[j].health -= 5;
 						//send pack to damage player
+						ZeroMemory(buf, 128);
+						char* tp = buf;
+						buf[0] = HEALTH;
+						tp++;
+						int* t = (int*)tp;
+						*t = players[j].health;
+						sendto(in, buf, 128, 0, (sockaddr*)&players[j].addr, sizeof(players[j].addr));
+						Entity* pt = nullptr;
+						for (auto k : players) {
+							if (bullets[i].PID == k.ID) {
+								k.score++;
+								pt = &k;
+							}
+						}
+						ZeroMemory(buf, 128);
+						buf[0] = SCORE;
+						tp = buf;
+						tp++;
+						t = (int*)tp;
+						*t = bullets[i].PID;
+						t++;
+						*t = pt->score;
+						for (int k = 0; k < master.fd_count; k++) {
+							send(master.fd_array[k], buf, 128, 0);
+						}
 						er = true;
 						j = players.size();
 					}
 				}
-				if (bullets[i].x < 0 || bullets[i].y < 0) {
+				mt1.unlock();
+				if (bullets[i].x < 0 || bullets[i].y < 0 || bullets[i].x > 1500 || bullets[i].y > 1500) {
 					er = true;
 				}
 				if (er) {
+					ZeroMemory(buf, 128);
 					char* tt = buf;
 					buf[0] = RMVBULLET;
 					tt++;
@@ -295,6 +367,7 @@ int main() {
 					bullets.erase(bullets.begin() + i);
 				}
 				else {
+					ZeroMemory(buf, 128);
 					char* tt = buf;
 					buf[0] = BPOSITION;
 					tt++;
@@ -310,12 +383,12 @@ int main() {
 					t++;
 					*t = bullets[i].trajy;
 					i++;
+					mt1.lock();
+					for (auto& j : addresses) {
+						sendto(in, buf, 128, 0, (sockaddr*)&j, sizeof(j));
+					}
+					mt1.unlock();
 				}
-				mt1.lock();
-				for (auto& i : addresses) {
-					sendto(in, buf, 128, 0, (sockaddr*)&i, sizeof(i));
-				}
-				mt1.unlock();
 			}
 			btime.resetTime();
 		}
