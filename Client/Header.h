@@ -111,8 +111,21 @@ void connectToServer(SOCKET* udpSock, SOCKET* tcpSock, sockaddr_in *server, Enti
 	tt = (int*)t;
 	*tt = player->ID;
 	player->health = 100;
+	sendit:
 	sendto(*udpSock, buf, 128, 0, (sockaddr*)server, sizeof(*server));
 	//wait for udp server socket to send return connect packet
+	char rbuf[128];
+	ZeroMemory(rbuf, 128);
+	int siz = sizeof(*server);
+	int byts = recvfrom(*udpSock, rbuf, 128, 0, (sockaddr*)server, &siz);
+	if (byts == 0) {
+		goto sendit;
+	}
+	else if (rbuf[0] != CONNECT) {
+		goto sendit;
+	}
+	std::cout << "UDP fully connected\n";
+
 }
 
 //only recieve data in udp

@@ -279,6 +279,9 @@ int main() {
 						}
 						std::cout << "New address added\n";
 					}
+					ZeroMemory(buf, 128);
+					buf[0] = CONNECT;
+					sendto(in, buf, 128, 0, (sockaddr*)&client, clientLen);
 					break;
 				}
 			}

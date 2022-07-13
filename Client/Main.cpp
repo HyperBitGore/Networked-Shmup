@@ -2,7 +2,6 @@
 #undef main
 
 
-//maybe change connection to not use UDP for finding players
 
 
 void generateWalls(std::vector<Entity>& output) {
@@ -148,7 +147,7 @@ int main() {
 		*idn = player.ID;
 		sendto(udpSock, buf, 128, 0, (sockaddr*)&server, sizeof(server));
 		int mx, my;
-		if (SDL_GetMouseState(&mx, &my) & SDL_BUTTON(SDL_BUTTON_LEFT) && shootcool > 0.005) {
+		if (SDL_GetMouseState(&mx, &my) & SDL_BUTTON(SDL_BUTTON_LEFT) && shootcool > 0.015) {
 			//send bullet creation data to server
 			buf[0] = NEWBULLET;
 			char* tt = buf;
